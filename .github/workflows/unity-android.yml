@@ -1,0 +1,91 @@
+name: Build Unity Android APK
+
+"on":
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the public game source
+        uses: actions/checkout@v4
+
+      - name: Check Unity credentials
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          test -n "$UNITY_EMAIL" || { echo "Missing UNITY_EMAIL repository secret"; exit 1; }
+          test -n "$UNITY_PASSWORD" || { echo "Missing UNITY_PASSWORD repository secret"; exit 1; }
+
+      - name: Generate deterministic game assets
+        run: |
+          set -euo pipefail
+          python3 Tools/generate_assets.py
+          python3 Tests/verify_project.py
+
+      - name: Install Unity 2022.3.62f1 from the official CDN
+        env:
+          UNITY_INSTALLER_URL: https://download.unity3d.com/download_unity/4af31df58517/UnitySetup-2022.3.62f1
+          UNITY_INSTALLER_MD5: 0a1bc2d7fa56b205bf0a9dd8843abbc0
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --retry-delay 5 \
+            "$UNITY_INSTALLER_URL" --output "$RUNNER_TEMP/UnitySetup"
+          echo "$UNITY_INSTALLER_MD5  $RUNNER_TEMP/UnitySetup" | md5sum --check --strict
+          chmod +x "$RUNNER_TEMP/UnitySetup"
+          mkdir -p "$RUNNER_TEMP/unity" "$RUNNER_TEMP/unity-downloads"
+          "$RUNNER_TEMP/UnitySetup" \
+            --unattended \
+            --install-location="$RUNNER_TEMP/unity" \
+            --download-location="$RUNNER_TEMP/unity-downloads" \
+            --components=Unity,Android \
+            --verbose
+          test -x "$RUNNER_TEMP/unity/Editor/Unity"
+
+      - name: Activate Unity Personal and build APK
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          UNITY_EDITOR="$RUNNER_TEMP/unity/Editor/Unity"
+          LICENSING_CLIENT="$RUNNER_TEMP/unity/Editor/Data/Resources/Licensing/Client/Unity.Licensing.Client"
+          test -x "$UNITY_EDITOR"
+          test -x "$LICENSING_CLIENT"
+          "$LICENSING_CLIENT" \
+            --username "$UNITY_EMAIL" \
+            --password "$UNITY_PASSWORD" \
+            --activate-all \
+            --include-personal
+          deactivate_license() {
+            "$LICENSING_CLIENT" \
+              --username "$UNITY_EMAIL" \
+              --password "$UNITY_PASSWORD" \
+              --deactivate-all || true
+          }
+          trap deactivate_license EXIT
+          "$UNITY_EDITOR" \
+            -batchmode \
+            -nographics \
+            -quit \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -buildTarget Android \
+            -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
+            -logFile /dev/stdout
+          test -s Builds/Android/Ballistic-Sniper-Unity-v3.0.0.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ballistic-Sniper-Unity-v3.0.0-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v3.0.0.apk
+          if-no-files-found: error
+          retention-days: 7
