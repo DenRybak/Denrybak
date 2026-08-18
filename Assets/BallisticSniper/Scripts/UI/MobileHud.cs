@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -59,7 +60,6 @@ namespace BallisticSniper
 
         private BallisticGame game;
         private Font font;
-        private Sprite roundedSprite;
         private Canvas canvas;
         private RectTransform safeRoot;
         private GameObject aimSurface;
@@ -111,6 +111,14 @@ namespace BallisticSniper
         private Text summaryStats;
         private Text cinematicLabel;
 
+        // uGUI's normal Button.onClick path is retained, but every runtime
+        // button is also hit-tested directly against Android touches.  This
+        // makes the menus usable even on devices where the legacy input
+        // module occasionally drops a pointer-up event after a safe-area or
+        // orientation change.
+        private readonly List<ReliableButtonBinding> reliableButtons = new List<ReliableButtonBinding>();
+        private readonly Dictionary<int, ReliableButtonBinding> pressedPointers = new Dictionary<int, ReliableButtonBinding>();
+
         public float ScopeRadius
         {
             get
@@ -126,7 +134,6 @@ namespace BallisticSniper
         {
             game = owner;
             LoadFont();
-            CreateRoundedSprite();
             CreateCanvas();
             CreateScopeLayer();
             CreateGameplay();
@@ -138,6 +145,11 @@ namespace BallisticSniper
             CreatePause();
             CreateCinematic();
             ShowMenu(0, Difficulty.Shooter);
+        }
+
+        private void Update()
+        {
+            DispatchReliableTouches();
         }
 
         public void SetReticleScale(float pixelsPerMil, int zoom)
@@ -510,7 +522,9 @@ namespace BallisticSniper
             {
                 Image image = root.AddComponent<Image>();
                 image.color = background.Value;
-                image.raycastTarget = true;
+                // A full-screen decorative image must never win a raycast over
+                // a child button.  The direct touch fallback also ignores it.
+                image.raycastTarget = false;
             }
             return root;
         }
@@ -521,8 +535,12 @@ namespace BallisticSniper
             panel.transform.SetParent(parent, false);
             SetAnchors(panel.GetComponent<RectTransform>(), anchorMin, anchorMax);
             Image image = panel.GetComponent<Image>();
-            image.sprite = roundedSprite;
-            image.type = Image.Type.Sliced;
+            // A sprite generated at runtime was not rendered by several
+            // Android GPU/driver combinations, leaving invisible hit areas.
+            // A sprite-less Simple Image uses Unity's built-in white texture
+            // and is deterministic on every renderer.
+            image.sprite = null;
+            image.type = Image.Type.Simple;
             image.color = color;
             image.raycastTarget = false;
             return panel;
@@ -569,9 +587,10 @@ namespace BallisticSniper
             buttonObject.transform.SetParent(parent, false);
             SetAnchors(buttonObject.GetComponent<RectTransform>(), anchorMin, anchorMax);
             Image image = buttonObject.GetComponent<Image>();
-            image.sprite = roundedSprite;
-            image.type = Image.Type.Sliced;
+            image.sprite = null;
+            image.type = Image.Type.Simple;
             image.color = Color.white;
+            image.raycastTarget = true;
             Color normal = primary ? new Color32(201, 143, 45, 248) : new Color32(26, 49, 43, 244);
             Button button = buttonObject.GetComponent<Button>();
             ColorBlock colors = button.colors;
@@ -581,11 +600,89 @@ namespace BallisticSniper
             colors.disabledColor = new Color32(40, 48, 45, 180);
             colors.colorMultiplier = 1f;
             button.colors = colors;
-            if (action != null) button.onClick.AddListener(() => action());
+            button.targetGraphic = image;
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            ReliableButtonBinding binding = new ReliableButtonBinding(button, action);
+            reliableButtons.Add(binding);
+            if (action != null) button.onClick.AddListener(binding.Invoke);
             Text text = CreateText(buttonObject.transform, "Label", new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f),
                 21, TextAnchor.MiddleCenter, primary ? Ink : Paper, FontStyle.Bold);
             text.text = label;
             return button;
+        }
+
+        private void DispatchReliableTouches()
+        {
+            if (Input.touchCount > 0)
+            {
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    Touch touch = Input.GetTouch(i);
+                    if (touch.phase == TouchPhase.Began)
+                    {
+                        BeginReliablePress(touch.fingerId, touch.position);
+                    }
+                    else if (touch.phase == TouchPhase.Ended)
+                    {
+                        EndReliablePress(touch.fingerId, touch.position);
+                    }
+                    else if (touch.phase == TouchPhase.Canceled)
+                    {
+                        pressedPointers.Remove(touch.fingerId);
+                    }
+                }
+                return;
+            }
+
+            const int mousePointer = -1000;
+            if (Input.GetMouseButtonDown(0)) BeginReliablePress(mousePointer, Input.mousePosition);
+            if (Input.GetMouseButtonUp(0)) EndReliablePress(mousePointer, Input.mousePosition);
+        }
+
+        private void BeginReliablePress(int pointerId, Vector2 screenPosition)
+        {
+            pressedPointers.Remove(pointerId);
+            for (int i = reliableButtons.Count - 1; i >= 0; i--)
+            {
+                ReliableButtonBinding binding = reliableButtons[i];
+                if (!binding.CanInvoke) continue;
+                if (!RectTransformUtility.RectangleContainsScreenPoint(binding.Rect, screenPosition, null)) continue;
+                pressedPointers[pointerId] = binding;
+                return;
+            }
+        }
+
+        private void EndReliablePress(int pointerId, Vector2 screenPosition)
+        {
+            ReliableButtonBinding binding;
+            if (!pressedPointers.TryGetValue(pointerId, out binding)) return;
+            pressedPointers.Remove(pointerId);
+            if (!binding.CanInvoke) return;
+            if (!RectTransformUtility.RectangleContainsScreenPoint(binding.Rect, screenPosition, null)) return;
+            binding.Invoke();
+        }
+
+        private sealed class ReliableButtonBinding
+        {
+            private readonly Button button;
+            private readonly Action action;
+            private int lastInvokedFrame = -100;
+
+            public ReliableButtonBinding(Button button, Action action)
+            {
+                this.button = button;
+                this.action = action;
+            }
+
+            public RectTransform Rect => (RectTransform)button.transform;
+            public bool CanInvoke => action != null && button != null && button.isActiveAndEnabled && button.interactable;
+
+            public void Invoke()
+            {
+                if (!CanInvoke || lastInvokedFrame == Time.frameCount) return;
+                lastInvokedFrame = Time.frameCount;
+                action();
+            }
         }
 
         private static void SetButtonLabel(Button button, string label)
@@ -609,38 +706,6 @@ namespace BallisticSniper
                 try { font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
                 catch (ArgumentException) { font = null; }
             }
-        }
-
-        private void CreateRoundedSprite()
-        {
-            const int size = 64;
-            const float radius = 15f;
-            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false, true)
-            {
-                name = "Runtime Rounded UI",
-                wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear,
-                hideFlags = HideFlags.DontSave
-            };
-            Color[] pixels = new Color[size * size];
-            float half = size * 0.5f;
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float px = Mathf.Abs(x + 0.5f - half) - (half - radius);
-                    float py = Mathf.Abs(y + 0.5f - half) - (half - radius);
-                    float outside = Mathf.Sqrt(Mathf.Max(px, 0f) * Mathf.Max(px, 0f) + Mathf.Max(py, 0f) * Mathf.Max(py, 0f));
-                    float alpha = 1f - Mathf.SmoothStep(radius - 1.25f, radius + 1.25f, outside);
-                    pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
-                }
-            }
-            texture.SetPixels(pixels);
-            texture.Apply(false, true);
-            roundedSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f), 100f, 0u,
-                SpriteMeshType.FullRect, new Vector4(18f, 18f, 18f, 18f));
-            roundedSprite.name = "Runtime Rounded UI Sprite";
-            roundedSprite.hideFlags = HideFlags.DontSave;
         }
 
         private static void Stretch(RectTransform rect)

@@ -1,6 +1,6 @@
 # Ballistic: Снайперский рубеж — Unity 3D
 
-Полный Unity‑порт Android‑игры `Ballistic Sniper v2.1`, сделанный как автономный мобильный 3D‑проект. Версия проекта: **3.0.0‑unity**.
+Полный Unity‑порт Android‑игры `Ballistic Sniper v2.1`, сделанный как автономный мобильный 3D‑проект. Версия проекта: **3.0.1‑unity**.
 
 ## Что перенесено
 
@@ -52,7 +52,7 @@
 
 Готовый файл появится в:
 
-`Builds/Android/Ballistic-Sniper-Unity-v3.0.0.apk`
+`Builds/Android/Ballistic-Sniper-Unity-v3.0.1.apk`
 
 Минимальная версия Android — 8.0 (API 26). Архитектуры — ARMv7 и ARM64, backend — IL2CPP, ориентация — landscape.
 

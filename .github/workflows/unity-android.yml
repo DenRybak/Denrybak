@@ -150,12 +150,12 @@ jobs:
             -buildTarget Android \
             -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
             -logFile /dev/stdout
-          test -s Builds/Android/Ballistic-Sniper-Unity-v3.0.0.apk
+          test -s Builds/Android/Ballistic-Sniper-Unity-v3.0.1.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.0.0-apk
-          path: Builds/Android/Ballistic-Sniper-Unity-v3.0.0.apk
+          name: Ballistic-Sniper-Unity-v3.0.1-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v3.0.1.apk
           if-no-files-found: error
           retention-days: 7

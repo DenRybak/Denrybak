@@ -23,7 +23,7 @@ namespace BallisticSniper.Editor
         {
             PlayerSettings.companyName = "Denis Games";
             PlayerSettings.productName = "Ballistic: Снайперский рубеж";
-            PlayerSettings.bundleVersion = "3.0.0-unity";
+            PlayerSettings.bundleVersion = "3.0.1-unity";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
             PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
@@ -33,6 +33,7 @@ namespace BallisticSniper.Editor
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.unity");
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
+            PlayerSettings.Android.bundleVersionCode = 2;
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7;
             PlayerSettings.Android.forceInternetPermission = false;
             PlayerSettings.Android.forceSDCardPermission = false;
@@ -79,7 +80,7 @@ namespace BallisticSniper.Editor
             }
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../Builds/Android"));
             Directory.CreateDirectory(outputDirectory);
-            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v3.0.0.apk");
+            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v3.0.1.apk");
             BuildPlayerOptions options = new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },
