@@ -31,24 +31,94 @@ jobs:
           python3 Tools/generate_assets.py
           python3 Tests/verify_project.py
 
-      - name: Install Unity 2022.3.62f1 from the official CDN
-        env:
-          UNITY_INSTALLER_URL: https://download.unity3d.com/download_unity/4af31df58517/UnitySetup-2022.3.62f1
-          UNITY_INSTALLER_MD5: 0a1bc2d7fa56b205bf0a9dd8843abbc0
+      - name: Install Unity 2022.3.62f1 and Android modules from official sources
         run: |
           set -euo pipefail
-          curl --fail --location --retry 4 --retry-delay 5 \
-            "$UNITY_INSTALLER_URL" --output "$RUNNER_TEMP/UnitySetup"
-          echo "$UNITY_INSTALLER_MD5  $RUNNER_TEMP/UnitySetup" | md5sum --check --strict
-          chmod +x "$RUNNER_TEMP/UnitySetup"
-          mkdir -p "$RUNNER_TEMP/unity" "$RUNNER_TEMP/unity-downloads"
-          "$RUNNER_TEMP/UnitySetup" \
-            --unattended \
-            --install-location="$RUNNER_TEMP/unity" \
-            --download-location="$RUNNER_TEMP/unity-downloads" \
-            --components=Unity,Android \
-            --verbose
-          test -x "$RUNNER_TEMP/unity/Editor/Unity"
+          UNITY_ROOT="$RUNNER_TEMP/unity"
+          DOWNLOADS="$RUNNER_TEMP/unity-downloads"
+          ANDROID="$UNITY_ROOT/Editor/Data/PlaybackEngines/AndroidPlayer"
+          mkdir -p "$UNITY_ROOT" "$DOWNLOADS"
+
+          download() {
+            local url="$1" name="$2" sha256="$3"
+            curl --fail --location --retry 5 --retry-delay 5 \
+              "$url" --output "$DOWNLOADS/$name"
+            echo "$sha256  $DOWNLOADS/$name" | sha256sum --check --strict
+          }
+
+          download \
+            "https://download.unity3d.com/download_unity/4af31df58517/LinuxEditorInstaller/Unity-2022.3.62f1.tar.xz" \
+            "Unity-2022.3.62f1.tar.xz" \
+            "421f91441c4c7690a18af8acd58ba66389f4b0d8e518005dd8b9b5211e92d3c5"
+          download \
+            "https://download.unity3d.com/download_unity/4af31df58517/MacEditorTargetInstaller/UnitySetup-Android-Support-for-Editor-2022.3.62f1.pkg" \
+            "android-support.pkg" \
+            "97e41a40102c2c72680902f11183103a75ddc9a19528e0438f96c2585cd99a35"
+          download \
+            "https://download.unity3d.com/download_unity/open-jdk/open-jdk-linux-x64/jdk11.0.14.1-1_c17a2ae6fe1b4281fb613fed32027cf93e0251795387941bd8c1fcb6c74f9db4.zip" \
+            "openjdk.zip" \
+            "c17a2ae6fe1b4281fb613fed32027cf93e0251795387941bd8c1fcb6c74f9db4"
+          download \
+            "https://dl.google.com/android/repository/sdk-tools-linux-4333796.zip" \
+            "sdk-tools.zip" \
+            "92ffee5a1d98d856634e8b71132e8a95d96c83a63fde1099be3d86df3106def9"
+          download \
+            "https://dl.google.com/android/repository/android-ndk-r23b-linux.zip" \
+            "android-ndk.zip" \
+            "c6e97f9c8cfe5b7be0a9e6c15af8e7a179475b7ded23e2d1c1fa0945d6fb4382"
+          download \
+            "https://dl.google.com/android/repository/build-tools_r34-linux.zip" \
+            "build-tools.zip" \
+            "e858c4b60069d0431051b225d384413b1643e1289b00a4825aed347f25bd510f"
+          download \
+            "https://dl.google.com/android/repository/platform-tools_r32.0.0-linux.zip" \
+            "platform-tools.zip" \
+            "b10f0e159f11aa08437f2e612c91e52616b8429e9d3b8c2d230456f0edd394e6"
+          download \
+            "https://dl.google.com/android/repository/platform-33_r02.zip" \
+            "platform-33.zip" \
+            "f851b13fe89f8510a1250df5e8593e86176b2428f4f3cbe0e304a85818c07bc8"
+          download \
+            "https://dl.google.com/android/repository/platform-34-ext7_r02.zip" \
+            "platform-34.zip" \
+            "5323311cc3e4ad614f0b8053c72b651726f3422448cedd39e48f00737cda8ad0"
+          download \
+            "https://dl.google.com/android/repository/platform-35_r01.zip" \
+            "platform-35.zip" \
+            "ec20a0a65704e1b2554f8e3eebf588ef260569673c848c01aff2e29c28734cf4"
+          download \
+            "https://dl.google.com/android/repository/commandlinetools-linux-8092744_latest.zip" \
+            "commandline-tools.zip" \
+            "d71f75333d79c9c6ef5c39d3456c6c58c613de30e6a751ea0dbd433e8f8b9cbf"
+
+          tar -xJf "$DOWNLOADS/Unity-2022.3.62f1.tar.xz" -C "$UNITY_ROOT"
+          mkdir -p "$ANDROID"
+          python3 Tools/extract_unity_pkg.py "$DOWNLOADS/android-support.pkg" "$ANDROID"
+
+          mkdir -p "$ANDROID/OpenJDK" "$ANDROID/SDK" "$RUNNER_TEMP/android-ndk"
+          unzip -q "$DOWNLOADS/openjdk.zip" -d "$ANDROID/OpenJDK"
+          unzip -q "$DOWNLOADS/sdk-tools.zip" -d "$ANDROID/SDK"
+          unzip -q "$DOWNLOADS/platform-tools.zip" -d "$ANDROID/SDK"
+
+          unzip -q "$DOWNLOADS/android-ndk.zip" -d "$RUNNER_TEMP/android-ndk"
+          mv "$RUNNER_TEMP/android-ndk/android-ndk-r23b" "$ANDROID/NDK"
+
+          mkdir -p "$ANDROID/SDK/build-tools" "$ANDROID/SDK/platforms" "$ANDROID/SDK/cmdline-tools"
+          unzip -q "$DOWNLOADS/build-tools.zip" -d "$ANDROID/SDK/build-tools"
+          mv "$ANDROID/SDK/build-tools/android-14" "$ANDROID/SDK/build-tools/34.0.0"
+          unzip -q "$DOWNLOADS/platform-33.zip" -d "$ANDROID/SDK/platforms"
+          mv "$ANDROID/SDK/platforms/android-13" "$ANDROID/SDK/platforms/android-33"
+          unzip -q "$DOWNLOADS/platform-34.zip" -d "$ANDROID/SDK/platforms"
+          unzip -q "$DOWNLOADS/platform-35.zip" -d "$ANDROID/SDK/platforms"
+          unzip -q "$DOWNLOADS/commandline-tools.zip" -d "$ANDROID/SDK/cmdline-tools"
+          mv "$ANDROID/SDK/cmdline-tools/cmdline-tools" "$ANDROID/SDK/cmdline-tools/6.0"
+
+          test -x "$UNITY_ROOT/Editor/Unity"
+          test -f "$ANDROID/UnityEditor.Android.Extensions.dll"
+          test -x "$ANDROID/OpenJDK/bin/java"
+          test -x "$ANDROID/NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          test -x "$ANDROID/SDK/build-tools/34.0.0/aapt2"
+          test -f "$ANDROID/SDK/platforms/android-35/android.jar"
 
       - name: Activate Unity Personal and build APK
         env:
