@@ -656,7 +656,12 @@ namespace BallisticSniper
                 }
             }
             Collider foundCollider = gameObject.GetComponent<Collider>();
-            if (foundCollider != null) foundCollider.enabled = collider;
+            if (foundCollider == null)
+            {
+                throw new MissingComponentException(
+                    "Primitive collider for " + type + " is unavailable in this Player build.");
+            }
+            foundCollider.enabled = collider;
             return gameObject;
         }
     }

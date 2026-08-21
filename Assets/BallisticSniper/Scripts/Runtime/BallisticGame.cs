@@ -94,6 +94,7 @@ namespace BallisticSniper
 
         private void Awake()
         {
+            RuntimeTypeRetention.EnsureLinked();
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);

@@ -40,6 +40,10 @@ namespace BallisticSniper.Editor
             PlayerSettings.Android.forceSDCardPermission = false;
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Android, ApiCompatibilityLevel.NET_Standard_2_0);
+            // The range is assembled from GameObject.CreatePrimitive at runtime. Unity's
+            // native class stripper cannot infer those collider dependencies from a scene.
+            PlayerSettings.stripEngineCode = false;
+            PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Android, ManagedStrippingLevel.Low);
             EditorUserBuildSettings.androidBuildSystem = AndroidBuildSystem.Gradle;
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             ConfigureAtlasImport();

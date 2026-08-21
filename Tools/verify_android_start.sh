@@ -23,9 +23,25 @@ adb shell am force-stop "$PACKAGE_NAME"
 adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 \
   | tee "$RESULTS_DIR/android-launch.txt"
 
+app_pid=""
+for _ in $(seq 1 30); do
+  app_pid="$(adb shell pidof "$PACKAGE_NAME" | tr -d '\r')"
+  if [ -n "$app_pid" ]; then
+    break
+  fi
+  sleep 1
+done
+test -n "$app_pid"
+
 menu_ready=0
 for _ in $(seq 1 120); do
   adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
+  adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-startup-app-logcat.txt"
+  if grep -Eq "Can't add component because class|ArgumentNullException|NullReferenceException|MissingReferenceException|MissingComponentException|FATAL EXCEPTION" \
+      "$RESULTS_DIR/android-startup-app-logcat.txt"; then
+    echo "Android startup exception detected before the menu became ready" >&2
+    exit 1
+  fi
   if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
     menu_ready=1
     break
@@ -34,8 +50,6 @@ for _ in $(seq 1 120); do
 done
 test "$menu_ready" -eq 1
 cp "$RESULTS_DIR/android-logcat.txt" "$RESULTS_DIR/android-menu-logcat.txt"
-app_pid="$(adb shell pidof "$PACKAGE_NAME" | tr -d '\r')"
-test -n "$app_pid"
 
 adb exec-out screencap -p > "$RESULTS_DIR/android-menu-before-tap.png"
 read -r screen_width screen_height < <(
@@ -67,7 +81,8 @@ adb shell dumpsys activity activities > "$RESULTS_DIR/android-activity.txt"
 adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-app-logcat.txt"
 test "$started" -eq 1
 grep -Fq "$PACKAGE_NAME" "$RESULTS_DIR/android-activity.txt"
-if grep -Eq "FATAL EXCEPTION|NullReferenceException|MissingReferenceException" "$RESULTS_DIR/android-app-logcat.txt"; then
+if grep -Eq "Can't add component because class|ArgumentNullException|NullReferenceException|MissingReferenceException|MissingComponentException|FATAL EXCEPTION" \
+    "$RESULTS_DIR/android-app-logcat.txt"; then
   echo "Android runtime exception detected" >&2
   exit 1
 fi

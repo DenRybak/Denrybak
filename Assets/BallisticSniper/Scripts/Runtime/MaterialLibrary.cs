@@ -39,9 +39,17 @@ namespace BallisticSniper
         {
             atlas = Resources.Load<Texture2D>("BallisticSniper/Textures/range_material_atlas");
             litShader = Resources.Load<Shader>("BallisticSniper/Shaders/AtlasLit") ??
-                        Shader.Find("BallisticSniper/AtlasLit") ?? Shader.Find("Standard");
-            transparentShader = Shader.Find("Standard") ?? litShader;
-            unlitShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+                        Shader.Find("BallisticSniper/AtlasLit");
+            if (litShader == null)
+            {
+                throw new System.InvalidOperationException(
+                    "Required BallisticSniper/AtlasLit shader is missing from Resources.");
+            }
+
+            // Built-in Shader.Find targets can disappear from a stripped Android Player.
+            transparentShader = Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit") ??
+                                Shader.Find("BallisticSniper/TransparentLit") ?? litShader;
+            unlitShader = litShader;
         }
 
         public Material Get(

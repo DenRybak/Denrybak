@@ -68,12 +68,14 @@ def main() -> int:
         "ProjectSettings/EditorBuildSettings.asset",
         "Assets/BallisticSniper/Scenes/BallisticSniper.unity",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/TransparentLit.shader",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/GradientSky.shader",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader",
         "Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs",
         "Assets/BallisticSniper/Scripts/Runtime/Ballistics.cs",
         "Assets/BallisticSniper/Scripts/Runtime/GameData.cs",
         "Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/RuntimeTypeRetention.cs",
         "Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs",
         "Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs",
         "Assets/BallisticSniper/Scripts/UI/MobileHud.cs",
@@ -192,6 +194,27 @@ def main() -> int:
     if any(token not in configurator for token in build_tokens):
         raise AssertionError("v3.2 clean-install Android identity is missing")
 
+    stripping_tokens = (
+        "PlayerSettings.stripEngineCode = false",
+        "ManagedStrippingLevel.Low",
+    )
+    retention = require("Assets/link.xml").read_text(encoding="utf-8")
+    runtime_retention = require(
+        "Assets/BallisticSniper/Scripts/Runtime/RuntimeTypeRetention.cs"
+    ).read_text(encoding="utf-8")
+    if (any(token not in configurator for token in stripping_tokens) or
+            "UnityEngine.PhysicsModule" not in retention or
+            any(token not in runtime_retention for token in
+                ("typeof(BoxCollider)", "typeof(SphereCollider)", "typeof(CapsuleCollider)"))):
+        raise AssertionError("runtime primitive types can still be stripped from Android")
+
+    material_library = require(
+        "Assets/BallisticSniper/Scripts/Runtime/MaterialLibrary.cs"
+    ).read_text(encoding="utf-8")
+    if ('Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit")' not in material_library or
+            "unlitShader = litShader" not in material_library):
+        raise AssertionError("runtime materials still depend on a strippable built-in shader")
+
     android_test = require("Tools/verify_android_start.sh").read_text(encoding="utf-8")
     android_test_tokens = (
         "adb install -r",
@@ -200,6 +223,8 @@ def main() -> int:
         "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
         "android-gameplay-after-tap.png",
         "android-app-logcat.txt",
+        "android-startup-app-logcat.txt",
+        "Can't add component because class",
     )
     if any(token not in android_test for token in android_test_tokens):
         raise AssertionError("installed-APK Android tap verification is missing")
