@@ -54,6 +54,17 @@ namespace BallisticSniper
                 windDrift / rangeMetres * 1000.0);
         }
 
+        public static double HorizontalImpact(
+            double opticalAxisXMetres,
+            double rangeMetres,
+            double crossWindMetresPerSecond,
+            double windageDialMil)
+        {
+            BallisticSolution solution = Solve(rangeMetres, crossWindMetresPerSecond);
+            return opticalAxisXMetres + solution.WindDriftMetres +
+                   windageDialMil * rangeMetres / 1000.0;
+        }
+
         public static double TimeOfFlight(double rangeMetres)
         {
             double ratio = 1.0 - DragRate * rangeMetres / MuzzleVelocity;

@@ -87,10 +87,16 @@ namespace BallisticSniper
         private float reviewStartedAt;
         private float resultRevealAt;
         private bool resultShown;
+        private float fireReadyAt;
+        private int acceptedShotCount;
+        private bool awaitingAimAfterResult;
 
         public static BallisticGame Instance { get; private set; }
         public float CurrentWind => currentWind;
         public GameScreen CurrentScreen => screen;
+        public int AcceptedShotCountForTests => acceptedShotCount;
+        public bool IsResultReadyForTests => screen == GameScreen.Result && resultShown;
+        public ShotRecord CurrentShotForTests => currentShot;
 
         private void Awake()
         {
@@ -118,7 +124,7 @@ namespace BallisticSniper
             worldStageIndex = 0;
             PrepareCampaignForMenu(false);
             hud.ShowMenu(highScore, difficulty);
-            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu");
+            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=3.3.0 screen=Menu");
         }
 
         private void Update()
@@ -160,6 +166,7 @@ namespace BallisticSniper
                     {
                         resultShown = true;
                         hud.ShowResult(BuildResultSnapshot());
+                        LogResultReady();
                     }
                     break;
             }
@@ -298,18 +305,23 @@ namespace BallisticSniper
             float maxAngle = 13f * MilToDegrees;
             aimYawDegrees = Mathf.Clamp(aimYawDegrees, -maxAngle, maxAngle);
             aimPitchDegrees = Mathf.Clamp(aimPitchDegrees, -maxAngle, maxAngle);
+            if (awaitingAimAfterResult && screen == GameScreen.Playing)
+            {
+                awaitingAimAfterResult = false;
+                Debug.Log("BALLISTIC_ANDROID_AIM_READY screen=Playing acceptedShots=" + acceptedShotCount);
+            }
         }
 
         public void Fire()
         {
-            if (screen != GameScreen.Playing || shotInStage >= GameRules.ShotsPerStage) return;
+            if (!CanAcceptFire()) return;
 
             BallisticSolution solution = Ballistics.Solve(range, currentWind);
-            Vector2 aimPoint = EffectiveAimPointAtRange();
+            Vector3 opticalAimPoint = OpticalAxisPointAtRange();
             float metresPerMil = range / 1000f;
             Vector3 impact = new Vector3(
-                aimPoint.x + (float)solution.WindDriftMetres + windageDialMil * metresPerMil,
-                aimPoint.y - (float)solution.DropMetres + elevationDialMil * metresPerMil,
+                (float)Ballistics.HorizontalImpact(opticalAimPoint.x, range, currentWind, windageDialMil),
+                opticalAimPoint.y - (float)solution.DropMetres + elevationDialMil * metresPerMil,
                 range);
 
             firingCameraPosition = playerCamera.transform.position;
@@ -328,6 +340,10 @@ namespace BallisticSniper
             shotSceneClock = sceneClock;
             flightElapsed = 0f;
             screen = GameScreen.Flight;
+            acceptedShotCount++;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_FIRE_ACCEPTED shot={0} wind={1:+0.00;-0.00;0.00} impactX={2:+0.000;-0.000;0.000} opticalX={3:+0.000;-0.000;0.000}",
+                acceptedShotCount, currentWind, impact.x, opticalAimPoint.x));
 
             recoilMilX = 0.06f + Random.value * 0.08f;
             recoilMilY = 0.18f + Random.value * 0.09f;
@@ -356,8 +372,14 @@ namespace BallisticSniper
                 }
                 ResetAim();
                 screen = GameScreen.Playing;
-                RefreshGameplayHud(true);
-                hud.ShowGameplay(BuildHudSnapshot(true), false);
+                // A release from the result button must never fall through to
+                // the fire control that appears underneath it on the next frame.
+                fireReadyAt = Time.unscaledTime + 0.40f;
+                awaitingAimAfterResult = true;
+                RefreshGameplayHud(false);
+                hud.ShowGameplay(BuildHudSnapshot(false), false);
+                Debug.Log("BALLISTIC_ANDROID_RETURN_TO_TARGETS screen=Playing fireLocked=True gameplayVisible=" +
+                          hud.IsGameplayVisible + " scopeVisible=" + hud.IsScopeVisible);
                 return;
             }
 
@@ -500,6 +522,8 @@ namespace BallisticSniper
             stage = 0;
             shotInStage = 0;
             totalShots = 0;
+            acceptedShotCount = 0;
+            fireReadyAt = 0f;
             score = 0;
             hitCount = 0;
             successfulShots = 0;
@@ -584,6 +608,7 @@ namespace BallisticSniper
             deferredSteelHide = null;
             deferredBonusImpact = false;
             resultShown = false;
+            awaitingAimAfterResult = false;
             RemoveImpactMarker();
             playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
             ApplyScopeFov();
@@ -657,13 +682,27 @@ namespace BallisticSniper
             hud?.SetReticleScale(pixelsPerMil, GameRules.ZoomLevels[zoomIndex]);
         }
 
-        private Vector2 EffectiveAimPointAtRange()
+        private Vector3 OpticalAxisPointAtRange()
         {
-            float yaw = aimYawDegrees + (swayMilX + recoilMilX) * MilToDegrees;
-            float pitch = aimPitchDegrees + (swayMilY + recoilMilY) * MilToDegrees;
-            return new Vector2(
-                Mathf.Tan(yaw * Mathf.Deg2Rad) * range,
-                CameraHeight + Mathf.Tan(pitch * Mathf.Deg2Rad) * range);
+            Ray opticalRay = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+            float forward = opticalRay.direction.z;
+            if (Mathf.Abs(forward) < 0.0001f)
+            {
+                return new Vector3(opticalRay.origin.x, opticalRay.origin.y, range);
+            }
+            float distance = (range - opticalRay.origin.z) / forward;
+            Vector3 point = opticalRay.GetPoint(distance);
+            point.z = range;
+            return point;
+        }
+
+        public Vector3 OpticalAxisPointForTests() => OpticalAxisPointAtRange();
+
+        private bool CanAcceptFire()
+        {
+            return screen == GameScreen.Playing &&
+                   shotInStage < GameRules.ShotsPerStage &&
+                   Time.unscaledTime >= fireReadyAt;
         }
 
         private void LaunchTracer()
@@ -803,14 +842,14 @@ namespace BallisticSniper
             float focalPixels = hud.CanvasHeight / (2f * Mathf.Tan(fov * Mathf.Deg2Rad * 0.5f));
             float pixelsPerMil = focalPixels * 0.001f;
             float visibleRadiusMil = hud.ScopeRadius * 0.56f / Mathf.Max(0.1f, pixelsPerMil);
-            reviewZoom = Mathf.Clamp(visibleRadiusMil / Mathf.Max(0.55f, targetRadiusMil + separationMil * 0.55f), 1f, 3f);
+            reviewZoom = Mathf.Clamp(visibleRadiusMil / Mathf.Max(0.55f, targetRadiusMil + separationMil * 0.55f), 2.5f, 8f);
 
             reviewStartRotation = firingCameraRotation;
             Vector3 reviewCentre = (currentShot.Impact + currentShot.TargetCentre) * 0.5f;
             Vector3 direction = reviewCentre - firingCameraPosition;
             reviewTargetRotation = direction.sqrMagnitude > 0.001f ? Quaternion.LookRotation(direction.normalized, Vector3.up) : firingCameraRotation;
             reviewStartFov = firingCameraFov;
-            reviewTargetFov = firingCameraFov / reviewZoom;
+            reviewTargetFov = Mathf.Max(1.25f, firingCameraFov / reviewZoom);
         }
 
         private void BeginKillCam()
@@ -849,8 +888,18 @@ namespace BallisticSniper
             reviewStartedAt = Time.unscaledTime;
             resultRevealAt = Time.unscaledTime + revealDelay;
             resultShown = revealDelay <= 0f;
-            if (resultShown) hud.ShowResult(BuildResultSnapshot());
+            if (resultShown)
+            {
+                hud.ShowResult(BuildResultSnapshot());
+                LogResultReady();
+            }
             else hud.ShowImpactWait(BuildHudSnapshot(false));
+        }
+
+        private void LogResultReady()
+        {
+            Debug.Log("BALLISTIC_ANDROID_RESULT_READY screen=Result gameplayVisible=" + hud.IsGameplayVisible +
+                      " resultVisible=" + hud.IsResultVisible + " acceptedShots=" + acceptedShotCount);
         }
 
         private void UpdateReviewCamera()
@@ -917,7 +966,7 @@ namespace BallisticSniper
                 ShotsRemaining = GameRules.ShotsPerStage - shotInStage,
                 Score = score,
                 BonusMode = bonusMode,
-                CanFire = canFire && screen == GameScreen.Playing,
+                CanFire = canFire && CanAcceptFire(),
                 Difficulty = difficulty
             };
         }
@@ -935,7 +984,7 @@ namespace BallisticSniper
             impactMarker.name = "Impact Review Marker";
             impactMarker.transform.SetParent(transform, true);
             impactMarker.transform.position = currentShot.Impact + Vector3.back * 0.10f;
-            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.08f, 0.035f, 0.08f);
+            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.18f, 0.09f, 0.18f);
             Renderer renderer = impactMarker.GetComponent<Renderer>();
             renderer.sharedMaterial = world.Materials.Solid(new Color(1f, 0.055f, 0.025f), true, "_ImpactMarker");
             Collider collider = impactMarker.GetComponent<Collider>();

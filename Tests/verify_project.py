@@ -120,9 +120,14 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v3.2.0  •  Без рекламы',
+        '"v3.3.0  •  Без рекламы',
         "button.onClick.AddListener(binding.Invoke)",
         "Time.unscaledTime - lastInvokedAt < 0.30f",
+        "SetRoots(result: true, scope: true)",
+        "TapResultActionThroughAndroidFallbackForTests",
+        "ResultActionOverlapsFireForTests",
+        "aimSurface.transform.SetParent(fullScreenRoot, false)",
+        "scopeLayer.transform.SetParent(fullScreenRoot, false)",
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
@@ -141,6 +146,11 @@ def main() -> int:
         "menuVisible=",
         "worldStageIndex = stage;",
         "if (screen == GameScreen.Help) CloseHelp();",
+        "OpticalAxisPointAtRange()",
+        "Ballistics.HorizontalImpact",
+        "fireReadyAt = Time.unscaledTime + 0.40f",
+        "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
+        "BALLISTIC_ANDROID_AIM_READY",
     )
     if any(token not in game_flow for token in flow_tokens):
         raise AssertionError("direct START-to-gameplay/help navigation flow is missing")
@@ -174,7 +184,10 @@ def main() -> int:
         "TapStartThroughStandardClickForTests",
         "Is.EqualTo(GameScreen.Playing)",
         "IsMenuVisible",
-        "runtime-world-v3.2.0.png",
+        "runtime-world-v3.3.0.png",
+        "ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred",
+        "ResultActionOverlapsFireForTests",
+        "AcceptedShotCountForTests",
         "Sky has a yellow/red colour cast",
         "Terrain is oversaturated orange",
     )
@@ -185,14 +198,15 @@ def main() -> int:
 
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
-        'PlayerSettings.productName = "Ballistic Sniper 3.2"',
-        'PlayerSettings.bundleVersion = "3.2.0-unity"',
-        '"com.denis.ballisticsniper.unity.v32"',
-        '"Ballistic-Sniper-Unity-v3.2.0.apk"',
+        'PlayerSettings.productName = "Ballistic Sniper 3.3"',
+        'PlayerSettings.bundleVersion = "3.3.0-unity"',
+        '"com.denis.ballisticsniper.unity"',
+        '"Ballistic-Sniper-Unity-v3.3.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 9",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
-        raise AssertionError("v3.2 clean-install Android identity is missing")
+        raise AssertionError("v3.3 update-compatible Android identity is missing")
 
     stripping_tokens = (
         "PlayerSettings.stripEngineCode = false",
@@ -219,8 +233,14 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu",
+        "BALLISTIC_ANDROID_MENU_READY version=3.3.0 screen=Menu",
         "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
+        "BALLISTIC_ANDROID_IMPACT_CLOSEUP",
+        "BALLISTIC_ANDROID_RESULT_READY",
+        "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
+        "BALLISTIC_ANDROID_AIM_READY",
+        "android-impact-closeup.png",
+        "android-aim-after-return.png",
         "android-gameplay-after-tap.png",
         "android-app-logcat.txt",
         "android-startup-app-logcat.txt",

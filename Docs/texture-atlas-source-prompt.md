@@ -1,4 +1,4 @@
-# Ballistic Sniper 3.2 material atlas
+# Ballistic Sniper 3.3 material atlas
 
 The production texture atlas was generated as a single exact 4×4 grid for the Unity mobile range.
 

@@ -68,6 +68,7 @@ namespace BallisticSniper
         private Font font;
         private Texture2D uiTexture;
         private Canvas canvas;
+        private RectTransform fullScreenRoot;
         private RectTransform safeRoot;
         private GameObject aimSurface;
         private GameObject scopeLayer;
@@ -130,18 +131,21 @@ namespace BallisticSniper
         {
             get
             {
-                if (safeRoot != null && safeRoot.rect.width > 1f && safeRoot.rect.height > 1f)
-                    return Mathf.Min(safeRoot.rect.height * 0.455f, safeRoot.rect.width * 0.32f);
+                if (fullScreenRoot != null && fullScreenRoot.rect.width > 1f && fullScreenRoot.rect.height > 1f)
+                    return Mathf.Min(fullScreenRoot.rect.height * 0.455f, fullScreenRoot.rect.width * 0.32f);
                 return Mathf.Min(1080f * 0.455f, 1920f * 0.32f);
             }
         }
-        public float CanvasHeight => safeRoot != null && safeRoot.rect.height > 1f ? safeRoot.rect.height : 1080f;
+        public float CanvasHeight => fullScreenRoot != null && fullScreenRoot.rect.height > 1f ? fullScreenRoot.rect.height : 1080f;
         public Button StartButtonForTests => startButton;
         public Button BriefingEnterButtonForTests => briefingEnterButton;
+        public Button FireButtonForTests => fireButton;
+        public Button ResultActionForTests => resultAction;
         public bool IsGameplayVisible => gameplayRoot != null && gameplayRoot.activeInHierarchy;
         public bool IsScopeVisible => scopeLayer != null && scopeLayer.activeInHierarchy;
         public bool IsBriefingVisible => briefingRoot != null && briefingRoot.activeInHierarchy;
         public bool IsMenuVisible => menuRoot != null && menuRoot.activeInHierarchy;
+        public bool IsResultVisible => resultRoot != null && resultRoot.activeInHierarchy;
 
         public void Initialize(BallisticGame owner)
         {
@@ -259,7 +263,10 @@ namespace BallisticSniper
 
         public void ShowResult(ResultSnapshot snapshot)
         {
-            SetRoots(gameplay: true, result: true, scope: true);
+            // The result owns the whole interaction layer. Keeping Gameplay HUD
+            // active here used to place this action directly over FIRE.
+            SetRoots(result: true, scope: true);
+            fireButton.interactable = false;
             resultHeadline.text = snapshot.Headline;
             resultHeadline.color = snapshot.Points > 0 ? Gold : Red;
             resultPoints.text = snapshot.Points > 0 ? "+" + snapshot.Points + " ОЧКОВ" : "0 ОЧКОВ";
@@ -308,6 +315,7 @@ namespace BallisticSniper
             GameObject canvasObject = new GameObject("Mobile HUD", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasObject.transform.SetParent(transform, false);
             canvas = canvasObject.GetComponent<Canvas>();
+            fullScreenRoot = canvasObject.GetComponent<RectTransform>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 20;
             CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
@@ -326,16 +334,18 @@ namespace BallisticSniper
         private void CreateScopeLayer()
         {
             aimSurface = new GameObject("Aim Surface", typeof(RectTransform), typeof(Image), typeof(AimDragSurface));
-            aimSurface.transform.SetParent(safeRoot, false);
+            aimSurface.transform.SetParent(fullScreenRoot, false);
             Stretch(aimSurface.GetComponent<RectTransform>());
+            aimSurface.transform.SetAsFirstSibling();
             Image aimImage = aimSurface.GetComponent<Image>();
             aimImage.color = new Color(0f, 0f, 0f, 0.001f);
             AimDragSurface drag = aimSurface.GetComponent<AimDragSurface>();
             drag.Dragged = game.DragAim;
 
             scopeLayer = new GameObject("Scope Optics", typeof(RectTransform));
-            scopeLayer.transform.SetParent(safeRoot, false);
+            scopeLayer.transform.SetParent(fullScreenRoot, false);
             Stretch(scopeLayer.GetComponent<RectTransform>());
+            scopeLayer.transform.SetSiblingIndex(1);
 
             GameObject shadeObject = new GameObject("Circular Scope Mask", typeof(RectTransform), typeof(ScopeOverlayGraphic));
             shadeObject.transform.SetParent(scopeLayer.transform, false);
@@ -428,7 +438,7 @@ namespace BallisticSniper
             startBinding = reliableButtons[reliableButtons.Count - 1];
             startButton.GetComponentInChildren<Text>().fontSize = 31;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.2.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.3.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()
@@ -478,7 +488,7 @@ namespace BallisticSniper
             resultCorrection = CreateText(card.transform, "Correction", new Vector2(0.09f, 0.32f), new Vector2(0.91f, 0.58f), 17, TextAnchor.MiddleLeft, GoldLight, FontStyle.Bold);
             resultTarget = CreateText(card.transform, "Target", new Vector2(0.09f, 0.20f), new Vector2(0.91f, 0.32f), 15, TextAnchor.MiddleCenter, Paper);
             resultZoom = CreateText(card.transform, "Review Zoom", new Vector2(0.09f, 0.12f), new Vector2(0.91f, 0.20f), 15, TextAnchor.MiddleCenter, Gold);
-            resultAction = CreateButton(resultRoot.transform, "Continue", "К ЦЕЛЯМ", new Vector2(0.765f, 0.065f), new Vector2(0.955f, 0.175f), game.ContinueAfterResult, true);
+            resultAction = CreateButton(resultRoot.transform, "Continue", "К ЦЕЛЯМ", new Vector2(0.39f, 0.055f), new Vector2(0.61f, 0.175f), game.ContinueAfterResult, true);
         }
 
         private void CreateSummary()
@@ -705,11 +715,51 @@ namespace BallisticSniper
             startButton.onClick.Invoke();
         }
 
+        public void TapResultActionThroughAndroidFallbackForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            InvokeButtonAt(ButtonScreenCentre(resultAction));
+        }
+
+        public void TapFireThroughAndroidFallbackForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            InvokeButtonAt(ButtonScreenCentre(fireButton));
+        }
+
+        public Vector2 ReticleScreenCentreForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            RectTransform rect = (RectTransform)reticle.transform;
+            return RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(rect.rect.center));
+        }
+
+        public bool ResultActionOverlapsFireForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            return ButtonScreenRect(resultAction).Overlaps(ButtonScreenRect(fireButton));
+        }
+
         private Vector2 StartButtonScreenCentre()
         {
-            RectTransform rect = (RectTransform)startButton.transform;
+            return ButtonScreenCentre(startButton);
+        }
+
+        private static Vector2 ButtonScreenCentre(Button button)
+        {
+            RectTransform rect = (RectTransform)button.transform;
             Vector3 worldCentre = rect.TransformPoint(rect.rect.center);
             return RectTransformUtility.WorldToScreenPoint(null, worldCentre);
+        }
+
+        private static Rect ButtonScreenRect(Button button)
+        {
+            RectTransform rect = (RectTransform)button.transform;
+            Vector3[] corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            Vector2 bottomLeft = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+            Vector2 topRight = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
+            return Rect.MinMaxRect(bottomLeft.x, bottomLeft.y, topRight.x, topRight.y);
         }
 
         private sealed class ReliableButtonBinding

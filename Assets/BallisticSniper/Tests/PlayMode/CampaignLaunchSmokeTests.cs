@@ -65,6 +65,77 @@ namespace BallisticSniper.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred()
+        {
+            yield return null;
+
+            BallisticGame game = Object.FindObjectOfType<BallisticGame>();
+            MobileHud hud = Object.FindObjectOfType<MobileHud>();
+            Camera camera = Object.FindObjectOfType<Camera>();
+            Assert.That(game, Is.Not.Null);
+            Assert.That(hud, Is.Not.Null);
+            Assert.That(camera, Is.Not.Null);
+
+            if (game.CurrentScreen != GameScreen.Menu)
+            {
+                game.OpenMenu();
+                yield return new WaitForSecondsRealtime(0.36f);
+            }
+
+            game.SetDifficulty(Difficulty.Cadet);
+            hud.TapStartThroughAndroidFallbackForTests();
+            yield return null;
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing));
+
+            Vector3 opticalPoint = game.OpticalAxisPointForTests();
+            Vector3 opticalScreen = camera.WorldToScreenPoint(opticalPoint);
+            Vector2 reticleScreen = hud.ReticleScreenCentreForTests();
+            Assert.That(Vector2.Distance(new Vector2(opticalScreen.x, opticalScreen.y), reticleScreen),
+                Is.LessThan(1.5f), "The reticle is offset from the camera optical axis");
+
+            // Stage one centre steel is +0.15 MIL high; +1.0 MIL elevation
+            // compensates the 0.83 MIL drop closely enough for a bullseye.
+            game.AdjustElevation(1.0f);
+            int acceptedBeforeFire = game.AcceptedShotCountForTests;
+            game.Fire();
+            Assert.That(game.AcceptedShotCountForTests, Is.EqualTo(acceptedBeforeFire + 1));
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Flight));
+
+            float deadline = Time.realtimeSinceStartup + 8f;
+            while (!game.IsResultReadyForTests && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+            }
+            Assert.That(game.IsResultReadyForTests, Is.True, "The shot never reached its review result");
+            Assert.That(hud.IsResultVisible, Is.True);
+            Assert.That(hud.IsGameplayVisible, Is.False, "Gameplay HUD remained under the result action");
+            Assert.That(hud.FireButtonForTests.gameObject.activeInHierarchy, Is.False,
+                "FIRE is still active beneath К ЦЕЛЯМ");
+            Assert.That(hud.ResultActionOverlapsFireForTests(), Is.False,
+                "К ЦЕЛЯМ still geometrically overlaps FIRE");
+
+            int acceptedAtResult = game.AcceptedShotCountForTests;
+            hud.TapResultActionThroughAndroidFallbackForTests();
+            yield return null;
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing));
+            Assert.That(game.AcceptedShotCountForTests, Is.EqualTo(acceptedAtResult),
+                "Returning to targets fired another shot");
+
+            // Even a synthetic immediate tap on the newly revealed FIRE button
+            // is rejected while the return touch is being released.
+            hud.TapFireThroughAndroidFallbackForTests();
+            game.DragAim(new Vector2(24f, 9f));
+            yield return new WaitForSecondsRealtime(0.45f);
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing),
+                "The player did not get an aiming window after К ЦЕЛЯМ");
+            Assert.That(game.AcceptedShotCountForTests, Is.EqualTo(acceptedAtResult));
+            Assert.That(hud.FireButtonForTests.interactable, Is.True);
+
+            game.OpenMenu();
+            yield return new WaitForSecondsRealtime(0.36f);
+        }
+
         private static IEnumerator CaptureAndValidateWorldFrame()
         {
             // WaitForEndOfFrame is never resumed by the Unity Editor in
@@ -140,7 +211,7 @@ namespace BallisticSniper.Tests
 
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../TestResults"));
             Directory.CreateDirectory(outputDirectory);
-            File.WriteAllBytes(Path.Combine(outputDirectory, "runtime-world-v3.2.0.png"), capture.EncodeToPNG());
+            File.WriteAllBytes(Path.Combine(outputDirectory, "runtime-world-v3.3.0.png"), capture.EncodeToPNG());
 
             camera.targetTexture = previousTarget;
             RenderTexture.active = previousActive;

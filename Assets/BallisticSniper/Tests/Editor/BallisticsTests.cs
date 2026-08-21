@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using NUnit.Framework;
+using UnityEngine;
 
 namespace BallisticSniper.Tests
 {
@@ -32,6 +33,51 @@ namespace BallisticSniper.Tests
                 Assert.That(stage.Targets.Length, Is.EqualTo(5));
                 Assert.That(stage.HeightMil.Length, Is.EqualTo(5));
                 Assert.That(stage.Motions.Length, Is.EqualTo(5));
+            }
+        }
+
+        [Test]
+        public void WindDriftChangesSideAndRecommendedDialCancelsIt()
+        {
+            const double range = 500.0;
+            const double opticalX = 1.75;
+            BallisticSolution rightWind = Ballistics.Solve(range, 4.0);
+            BallisticSolution leftWind = Ballistics.Solve(range, -4.0);
+
+            Assert.That(rightWind.WindDriftMetres, Is.GreaterThan(0.0));
+            Assert.That(leftWind.WindDriftMetres, Is.LessThan(0.0));
+            Assert.That(leftWind.WindDriftMetres, Is.EqualTo(-rightWind.WindDriftMetres).Within(1e-9));
+            Assert.That(Ballistics.HorizontalImpact(opticalX, range, 0.0, 0.0), Is.EqualTo(opticalX).Within(1e-9));
+            Assert.That(
+                Ballistics.HorizontalImpact(opticalX, range, 4.0, -rightWind.WindMil),
+                Is.EqualTo(opticalX).Within(1e-9));
+            Assert.That(
+                Ballistics.HorizontalImpact(opticalX, range, -4.0, -leftWind.WindMil),
+                Is.EqualTo(opticalX).Within(1e-9));
+        }
+
+        [Test]
+        public void EveryCinematicEndsBesideTheImpactWithATightLens()
+        {
+            ShotRecord shot = new ShotRecord
+            {
+                Start = new Vector3(0f, BallisticGame.CameraHeight, -0.55f),
+                Impact = new Vector3(0.35f, 1.72f, 500f),
+                RangeMetres = 500f
+            };
+            Vector3 approach = (shot.Impact - shot.Start).normalized;
+
+            for (int variant = 0; variant < GameRules.CinematicNames.Length; variant++)
+            {
+                KillCamDirector.CalculateImpactCloseUp(
+                    shot, variant, out Vector3 position, out Vector3 lookAt, out float fieldOfView);
+
+                Assert.That(Mathf.Abs(position.y - shot.Impact.y), Is.LessThan(0.30f),
+                    "Variant " + variant + " still ends above the target");
+                Assert.That(Vector3.Distance(position, shot.Impact), Is.InRange(2.50f, 2.80f));
+                Assert.That(Vector3.Dot(shot.Impact - position, approach), Is.GreaterThan(2.45f));
+                Assert.That(Vector3.Distance(lookAt, shot.Impact), Is.LessThan(0.03f));
+                Assert.That(fieldOfView, Is.LessThanOrEqualTo(18f));
             }
         }
     }

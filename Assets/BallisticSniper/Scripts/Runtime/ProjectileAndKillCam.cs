@@ -88,12 +88,15 @@ namespace BallisticSniper
         private ShotRecord shot;
         private Material bulletMaterial;
         private GameObject bullet;
+        private GameObject impactHighlight;
         private TrailRenderer trail;
         private Action completed;
         private float elapsed;
         private float duration;
         private float originalNearClip;
         private int variant;
+        private bool impactVisible;
+        private bool closeUpReported;
 
         public bool Active { get; private set; }
         public int Variant => variant;
@@ -115,6 +118,8 @@ namespace BallisticSniper
             originalNearClip = targetCamera.nearClipPlane;
             targetCamera.nearClipPlane = 0.015f;
             Active = true;
+            impactVisible = false;
+            closeUpReported = false;
 
             bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             bullet.name = "Kill-cam .308 Projectile";
@@ -131,11 +136,21 @@ namespace BallisticSniper
             trail.sharedMaterial = bulletMaterial;
             trail.startColor = new Color(1f, 0.88f, 0.35f, 1f);
             trail.endColor = new Color(1f, 0.18f, 0.02f, 0f);
+
+            impactHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            impactHighlight.name = "Kill-cam Impact Point";
+            impactHighlight.transform.localScale = Vector3.one * 0.16f;
+            Collider impactCollider = impactHighlight.GetComponent<Collider>();
+            if (impactCollider != null) impactCollider.enabled = false;
+            MeshRenderer impactRenderer = impactHighlight.GetComponent<MeshRenderer>();
+            if (impactRenderer != null) impactRenderer.sharedMaterial = bulletMaterial;
+            impactHighlight.SetActive(false);
         }
 
         public void StopImmediately()
         {
             if (bullet != null) Destroy(bullet);
+            if (impactHighlight != null) Destroy(impactHighlight);
             if (targetCamera != null) targetCamera.nearClipPlane = originalNearClip;
             Active = false;
             completed = null;
@@ -155,6 +170,15 @@ namespace BallisticSniper
             if (bulletDirection.sqrMagnitude > 0.000001f)
             {
                 bullet.transform.rotation = Quaternion.FromToRotation(Vector3.up, bulletDirection.normalized);
+            }
+
+            if (!impactVisible && bulletT >= 0.995f)
+            {
+                Vector3 approach = (shot.Impact - shot.Start).normalized;
+                if (approach.sqrMagnitude < 0.5f) approach = Vector3.forward;
+                impactHighlight.transform.position = shot.Impact - approach * 0.055f;
+                impactHighlight.SetActive(true);
+                impactVisible = true;
             }
 
             PoseCamera(t, bulletT, bulletPosition, bulletDirection.normalized);
@@ -258,12 +282,52 @@ namespace BallisticSniper
                     break;
             }
 
+            // Every variant ends on the same readable impact composition:
+            // near the target plane, from the shooter's side, with a tight
+            // lens and enough hold time to inspect the exact hit location.
+            CalculateImpactCloseUp(shot, variant, out Vector3 impactPosition, out Vector3 impactLookAt, out float impactFov);
+            float impactBlend = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.67f, 0.87f, progress));
+            cameraPosition = Vector3.Lerp(cameraPosition, impactPosition, impactBlend);
+            lookAt = Vector3.Lerp(lookAt, impactLookAt, impactBlend);
+            fov = Mathf.Lerp(fov, impactFov, impactBlend);
+            roll = Mathf.Lerp(roll, 0f, impactBlend);
+
             cameraPosition.y = Mathf.Max(0.15f, cameraPosition.y);
             targetCamera.transform.position = cameraPosition;
             Vector3 forward = lookAt - cameraPosition;
             if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
             targetCamera.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up) * Quaternion.AngleAxis(roll, Vector3.forward);
             targetCamera.fieldOfView = fov;
+
+            if (!closeUpReported && progress >= 0.84f)
+            {
+                closeUpReported = true;
+                Vector3 viewport = targetCamera.WorldToViewportPoint(shot.Impact);
+                Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "BALLISTIC_ANDROID_IMPACT_CLOSEUP variant={0} fov={1:0.0} height={2:0.00} distance={3:0.00} viewport={4:0.00},{5:0.00}",
+                    variant, targetCamera.fieldOfView,
+                    targetCamera.transform.position.y - shot.Impact.y,
+                    Vector3.Distance(targetCamera.transform.position, shot.Impact),
+                    viewport.x, viewport.y));
+            }
+        }
+
+        public static void CalculateImpactCloseUp(
+            ShotRecord record,
+            int cameraVariant,
+            out Vector3 cameraPosition,
+            out Vector3 lookAt,
+            out float fieldOfView)
+        {
+            Vector3 approach = (record.Impact - record.Start).normalized;
+            if (approach.sqrMagnitude < 0.5f) approach = Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, approach).normalized;
+            if (side.sqrMagnitude < 0.5f) side = Vector3.right;
+            float sideSign = (Mathf.Abs(cameraVariant) & 1) == 0 ? 1f : -1f;
+            cameraPosition = record.Impact - approach * 2.60f +
+                             side * (0.42f * sideSign) + Vector3.up * 0.20f;
+            lookAt = record.Impact + Vector3.up * 0.015f;
+            fieldOfView = 17f;
         }
 
         private void Finish()
@@ -271,6 +335,7 @@ namespace BallisticSniper
             Active = false;
             targetCamera.nearClipPlane = originalNearClip;
             if (bullet != null) Destroy(bullet);
+            if (impactHighlight != null) Destroy(impactHighlight);
             Action callback = completed;
             completed = null;
             callback?.Invoke();
