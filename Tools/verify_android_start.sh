@@ -98,7 +98,10 @@ fi
 # Dial +1.0 MIL elevation on the static 200 m centre steel. This cancels
 # its +0.15 MIL height plus the calculated 0.83 MIL drop, guaranteeing the
 # bullseye path even at the maximum stage-one crosswind.
-elevation_x=$((screen_width * 83 / 1000))
+# Pixel 5's landscape cutout consumes 136 px on the left. 12% of the
+# physical display remains inside the safe-area ELEV button both with and
+# without that cutout; the old 8.3% coordinate landed just outside it.
+elevation_x=$((screen_width * 120 / 1000))
 elevation_plus_y=$((screen_height * 625 / 1000))
 adb shell input tap "$elevation_x" "$elevation_plus_y"
 sleep 0.38
