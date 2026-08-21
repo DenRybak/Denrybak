@@ -162,11 +162,6 @@ namespace BallisticSniper
             }
         }
 
-        private void OnDestroy()
-        {
-            if (Instance == this) Instance = null;
-        }
-
         public void SetDifficulty(Difficulty selected)
         {
             if (screen != GameScreen.Menu) return;
