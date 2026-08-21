@@ -58,7 +58,7 @@ Android‑пакет 3.2 имеет отдельный идентификато�
 
 `Builds/Android/Ballistic-Sniper-Unity-v3.2.0.apk`
 
-Минимальная версия Android — 8.0 (API 26). Архитектуры — ARMv7 и ARM64, backend — IL2CPP, ориентация — landscape.
+Минимальная версия Android — 8.0 (API 26). Архитектуры — ARMv7, ARM64 и x86_64, backend — IL2CPP, ориентация — landscape.
 
 ### Автоматическая сборка в GitHub Actions
 

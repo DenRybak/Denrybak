@@ -187,6 +187,7 @@ def main() -> int:
         'PlayerSettings.bundleVersion = "3.2.0-unity"',
         '"com.denis.ballisticsniper.unity.v32"',
         '"Ballistic-Sniper-Unity-v3.2.0.apk"',
+        "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
         raise AssertionError("v3.2 clean-install Android identity is missing")
@@ -198,6 +199,7 @@ def main() -> int:
         "BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu",
         "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
         "android-gameplay-after-tap.png",
+        "android-app-logcat.txt",
     )
     if any(token not in android_test for token in android_test_tokens):
         raise AssertionError("installed-APK Android tap verification is missing")

@@ -34,7 +34,8 @@ namespace BallisticSniper.Editor
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.bundleVersionCode = 8;
-            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7;
+            PlayerSettings.Android.targetArchitectures =
+                AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7 | AndroidArchitecture.X86_64;
             PlayerSettings.Android.forceInternetPermission = false;
             PlayerSettings.Android.forceSDCardPermission = false;
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);

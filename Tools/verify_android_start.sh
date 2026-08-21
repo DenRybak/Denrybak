@@ -33,6 +33,9 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 test "$menu_ready" -eq 1
+cp "$RESULTS_DIR/android-logcat.txt" "$RESULTS_DIR/android-menu-logcat.txt"
+app_pid="$(adb shell pidof "$PACKAGE_NAME" | tr -d '\r')"
+test -n "$app_pid"
 
 adb exec-out screencap -p > "$RESULTS_DIR/android-menu-before-tap.png"
 read -r screen_width screen_height < <(
@@ -45,6 +48,7 @@ test "$screen_width" -gt "$screen_height"
 # bottom-left coordinate system. adb uses a top-left origin.
 tap_x=$((screen_width * 825 / 1000))
 tap_y=$((screen_height * 415 / 1000))
+adb logcat -c
 adb shell input tap "$tap_x" "$tap_y"
 
 started=0
@@ -60,9 +64,10 @@ done
 
 adb exec-out screencap -p > "$RESULTS_DIR/android-gameplay-after-tap.png"
 adb shell dumpsys activity activities > "$RESULTS_DIR/android-activity.txt"
+adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-app-logcat.txt"
 test "$started" -eq 1
 grep -Fq "$PACKAGE_NAME" "$RESULTS_DIR/android-activity.txt"
-if grep -Eq "FATAL EXCEPTION|NullReferenceException|MissingReferenceException" "$RESULTS_DIR/android-logcat.txt"; then
+if grep -Eq "FATAL EXCEPTION|NullReferenceException|MissingReferenceException" "$RESULTS_DIR/android-app-logcat.txt"; then
   echo "Android runtime exception detected" >&2
   exit 1
 fi
