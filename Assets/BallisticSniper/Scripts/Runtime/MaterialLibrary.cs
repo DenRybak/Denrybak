@@ -64,6 +64,12 @@ namespace BallisticSniper
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
+            if (material.HasProperty("_NormalStrength"))
+            {
+                float normalStrength = surface == Surface.PaperTarget || surface == Surface.CrackedGlass ? 0.35f :
+                    surface == Surface.Snow ? 0.65f : surface == Surface.CorrugatedSteel ? 1.75f : 1.35f;
+                material.SetFloat("_NormalStrength", normalStrength);
+            }
             material.enableInstancing = true;
             materials[key] = material;
             return material;
@@ -122,6 +128,11 @@ namespace BallisticSniper
             {
                 material.SetVector("_AtlasCell", new Vector4(offset.x, offset.y, scale.x, scale.y));
                 material.SetVector("_Tiling", new Vector4(1f, 1f, 0f, 0f));
+                // AtlasLit performs cell selection itself. Keeping Unity's
+                // implicit texture transform at identity avoids selecting the
+                // atlas twice, which previously stretched and darkened cells.
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
             }
 
             if (material.HasProperty("_BaseMap"))
@@ -133,8 +144,11 @@ namespace BallisticSniper
             if (material.HasProperty("_MainTex"))
             {
                 material.SetTexture("_MainTex", atlas);
-                material.SetTextureScale("_MainTex", scale);
-                material.SetTextureOffset("_MainTex", offset);
+                if (!material.HasProperty("_AtlasCell"))
+                {
+                    material.SetTextureScale("_MainTex", scale);
+                    material.SetTextureOffset("_MainTex", offset);
+                }
             }
         }
 

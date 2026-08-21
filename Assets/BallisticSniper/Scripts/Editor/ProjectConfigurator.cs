@@ -22,18 +22,18 @@ namespace BallisticSniper.Editor
         public static void Configure()
         {
             PlayerSettings.companyName = "Denis Games";
-            PlayerSettings.productName = "Ballistic: Снайперский рубеж";
-            PlayerSettings.bundleVersion = "3.0.4-unity";
+            PlayerSettings.productName = "Ballistic Sniper 3.1";
+            PlayerSettings.bundleVersion = "3.1.0-unity";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
             PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;
             PlayerSettings.colorSpace = ColorSpace.Linear;
-            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.unity");
+            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.unity.v31");
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
-            PlayerSettings.Android.bundleVersionCode = 5;
+            PlayerSettings.Android.bundleVersionCode = 7;
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7;
             PlayerSettings.Android.forceInternetPermission = false;
             PlayerSettings.Android.forceSDCardPermission = false;
@@ -80,7 +80,7 @@ namespace BallisticSniper.Editor
             }
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../Builds/Android"));
             Directory.CreateDirectory(outputDirectory);
-            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v3.0.4.apk");
+            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v3.1.0.apk");
             BuildPlayerOptions options = new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },

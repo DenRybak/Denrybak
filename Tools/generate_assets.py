@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Generate the deterministic texture atlas and sound effects used by the game.
+"""Prepare the curated texture atlas and deterministic sound effects used by the game.
 
 The script intentionally depends only on the Python standard library so the
-same assets can be produced locally and on a clean GitHub Actions runner.
+same audio assets can be produced locally and on a clean GitHub Actions runner.
+The checked-in 2048px art-directed atlas is preserved; a procedural fallback
+is generated only when that source asset is absent.
 """
 
 from __future__ import annotations
 
 import math
 import random
+import hashlib
 import struct
 import wave
 import zlib
@@ -18,8 +21,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCE_ROOT = ROOT / "Assets/BallisticSniper/Resources/BallisticSniper"
 ATLAS_PATH = RESOURCE_ROOT / "Textures/range_material_atlas.png"
+ATLAS_PARTS_DIR = ROOT / "Tools/atlas_parts"
+CURATED_ATLAS_SHA256 = "4998f7dd58ddd64f648d60cded2b3e3e3b48f638dc563ca6df13e2f97490a96e"
 AUDIO_DIR = RESOURCE_ROOT / "Audio"
-ATLAS_SIZE = 1024
+ATLAS_SIZE = 2048
 CELL_SIZE = ATLAS_SIZE // 4
 SAMPLE_RATE = 22_050
 
@@ -170,6 +175,20 @@ def generate_atlas() -> None:
     ATLAS_PATH.write_bytes(png)
 
 
+def restore_curated_atlas() -> bool:
+    parts = sorted(ATLAS_PARTS_DIR.glob("range_material_atlas.png.part-*"))
+    if not parts:
+        return False
+    data = b"".join(part.read_bytes() for part in parts)
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != CURATED_ATLAS_SHA256:
+        raise RuntimeError(f"Curated atlas checksum mismatch: {digest}")
+    if not ATLAS_PATH.exists() or ATLAS_PATH.read_bytes() != data:
+        ATLAS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ATLAS_PATH.write_bytes(data)
+    return True
+
+
 def synth_sample(name: str, t: float, rng: random.Random, state: list[float]) -> float:
     white = rng.uniform(-1.0, 1.0)
     state[0] = state[0] * 0.88 + white * 0.12
@@ -246,9 +265,17 @@ def generate_audio() -> None:
 
 
 def main() -> None:
-    generate_atlas()
+    restored = restore_curated_atlas()
+    if not restored and not ATLAS_PATH.exists():
+        generate_atlas()
+    dimensions = ATLAS_PATH.read_bytes()[:24]
+    if dimensions[:8] != b"\x89PNG\r\n\x1a\n":
+        raise RuntimeError(f"Invalid PNG atlas: {ATLAS_PATH}")
+    width, height = struct.unpack(">II", dimensions[16:24])
+    if (width, height) != (ATLAS_SIZE, ATLAS_SIZE):
+        raise RuntimeError(f"Atlas must be {ATLAS_SIZE}x{ATLAS_SIZE}, got {width}x{height}")
     generate_audio()
-    print(f"Generated {ATLAS_PATH.relative_to(ROOT)} ({ATLAS_SIZE}x{ATLAS_SIZE})")
+    print(f"Using {ATLAS_PATH.relative_to(ROOT)} ({width}x{height})")
     print(f"Generated 9 WAV effects at {SAMPLE_RATE} Hz in {AUDIO_DIR.relative_to(ROOT)}")
 
 

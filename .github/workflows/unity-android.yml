@@ -120,7 +120,13 @@ jobs:
           test -x "$ANDROID/SDK/build-tools/34.0.0/aapt2"
           test -f "$ANDROID/SDK/platforms/android-35/android.jar"
 
-      - name: Activate Unity Personal and build APK
+      - name: Preserve the debug signing identity for future updates
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: ballistic-sniper-v31-debug-signing
+
+      - name: Test the real menu-to-scope flow and build APK
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -142,6 +148,24 @@ jobs:
               --deactivate-all || true
           }
           trap deactivate_license EXIT
+          mkdir -p "$GITHUB_WORKSPACE/TestResults"
+          command -v xvfb-run >/dev/null
+          xvfb-run -a "$UNITY_EDITOR" \
+            -batchmode \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -runTests \
+            -testPlatform EditMode \
+            -testResults "$GITHUB_WORKSPACE/TestResults/editmode-results.xml" \
+            -logFile /dev/stdout
+          xvfb-run -a "$UNITY_EDITOR" \
+            -batchmode \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -runTests \
+            -testPlatform PlayMode \
+            -testResults "$GITHUB_WORKSPACE/TestResults/playmode-results.xml" \
+            -logFile /dev/stdout
+          test -s "$GITHUB_WORKSPACE/TestResults/playmode-results.xml"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v3.1.0.png"
           "$UNITY_EDITOR" \
             -batchmode \
             -nographics \
@@ -150,12 +174,21 @@ jobs:
             -buildTarget Android \
             -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
             -logFile /dev/stdout
-          test -s Builds/Android/Ballistic-Sniper-Unity-v3.0.4.apk
+          test -s Builds/Android/Ballistic-Sniper-Unity-v3.1.0.apk
+
+      - name: Upload runtime smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ballistic-Sniper-Unity-v3.1.0-smoke-test
+          path: TestResults/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.0.4-apk
-          path: Builds/Android/Ballistic-Sniper-Unity-v3.0.4.apk
+          name: Ballistic-Sniper-Unity-v3.1.0-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v3.1.0.apk
           if-no-files-found: error
           retention-days: 7

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import hashlib
 import re
 import struct
 import sys
@@ -55,7 +56,7 @@ def check_png(path: Path) -> tuple[int, int]:
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise AssertionError("material atlas is not a valid PNG")
     width, height = struct.unpack(">II", data[16:24])
-    if width < 1024 or height < 1024:
+    if width < 2048 or height < 2048:
         raise AssertionError(f"material atlas too small: {width}x{height}")
     return width, height
 
@@ -67,11 +68,13 @@ def main() -> int:
         "ProjectSettings/EditorBuildSettings.asset",
         "Assets/BallisticSniper/Scenes/BallisticSniper.unity",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader",
         "Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs",
         "Assets/BallisticSniper/Scripts/Runtime/Ballistics.cs",
         "Assets/BallisticSniper/Scripts/Runtime/GameData.cs",
         "Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs",
         "Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs",
         "Assets/BallisticSniper/Scripts/UI/MobileHud.cs",
         "Assets/BallisticSniper/Scripts/UI/HudGraphics.cs",
     ]
@@ -109,26 +112,62 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v3.0.4  •  Без рекламы',
+        '"v3.1.0  •  Без рекламы',
         "button.onClick.AddListener(binding.Invoke)",
         "Time.unscaledTime - lastInvokedAt < 0.30f",
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
+    if "ПОДГОТОВКА" in mobile_hud:
+        raise AssertionError("obsolete preparation state can still block campaign launch")
     game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
     flow_tokens = (
         "public void CloseHelp()",
         "ConfigureStage(false)",
+        "public GameScreen CurrentScreen => screen;",
         "screen = GameScreen.Briefing;",
-        "private int worldStageIndex = -1;",
+        "EnterRange();",
         "if (worldStageIndex != stage)",
         "worldStageIndex = stage;",
-        "hud.SetBriefingReady();",
-        "if (screen != GameScreen.Briefing || !stageReady) return;",
+        "if (screen != GameScreen.Briefing) return;",
         "if (screen == GameScreen.Help) CloseHelp();",
     )
     if any(token not in game_flow for token in flow_tokens):
-        raise AssertionError("instant start/help navigation flow is missing")
+        raise AssertionError("direct START-to-gameplay/help navigation flow is missing")
+
+    rendering = require("Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs").read_text(encoding="utf-8")
+    atlas_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader").read_text(encoding="utf-8")
+    render_tokens = (
+        "Sky Fill Light",
+        "CreateGroundScatter",
+        "RenderSettings.ambientIntensity = 1.18f",
+        "MaterialPropertyBlock",
+    )
+    shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
+    if any(token not in rendering for token in render_tokens) or any(token not in atlas_shader for token in shader_tokens):
+        raise AssertionError("lighting, texture relief, or material tiling upgrade is missing")
+
+    playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
+    test_tokens = (
+        "StartButtonEntersTheScopeForEveryDifficultyAndRendersTheRange",
+        "Difficulty.Cadet",
+        "Difficulty.Shooter",
+        "Difficulty.Expert",
+        "Is.EqualTo(GameScreen.Playing)",
+        "runtime-world-v3.1.0.png",
+    )
+    if any(token not in playmode_test for token in test_tokens):
+        raise AssertionError("real Unity campaign launch/render smoke test is missing")
+
+    configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
+    build_tokens = (
+        'PlayerSettings.productName = "Ballistic Sniper 3.1"',
+        'PlayerSettings.bundleVersion = "3.1.0-unity"',
+        '"com.denis.ballisticsniper.unity.v31"',
+        '"Ballistic-Sniper-Unity-v3.1.0.apk"',
+    )
+    if any(token not in configurator for token in build_tokens):
+        raise AssertionError("v3.1 clean-install Android identity is missing")
 
     visual_200 = time_of_flight(200) * 1.25
     visual_900 = time_of_flight(900) * 1.25
@@ -147,6 +186,14 @@ def main() -> int:
 
     atlas = require("Assets/BallisticSniper/Resources/BallisticSniper/Textures/range_material_atlas.png")
     width, height = check_png(atlas)
+    atlas_parts = sorted((ROOT / "Tools/atlas_parts").glob("range_material_atlas.png.part-*"))
+    if len(atlas_parts) != 10:
+        raise AssertionError("curated material atlas parts are incomplete")
+    rebuilt_atlas = b"".join(part.read_bytes() for part in atlas_parts)
+    if hashlib.sha256(rebuilt_atlas).hexdigest() != "4998f7dd58ddd64f648d60cded2b3e3e3b48f638dc563ca6df13e2f97490a96e":
+        raise AssertionError("curated material atlas checksum mismatch")
+    if rebuilt_atlas != atlas.read_bytes():
+        raise AssertionError("workspace material atlas differs from curated source parts")
 
     audio_dir = ROOT / "Assets/BallisticSniper/Resources/BallisticSniper/Audio"
     expected_audio = {
@@ -171,7 +218,8 @@ def main() -> int:
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
     print("OK: Android buttons use debounced touch-down plus standard UI click fallback")
-    print("OK: START reuses the loaded first range and enables briefing immediately")
+    print("OK: START enters gameplay directly for all three difficulties in the Unity smoke test")
+    print("OK: 2048px atlas, generated surface relief, improved lighting and render validation are present")
     return 0
 
 

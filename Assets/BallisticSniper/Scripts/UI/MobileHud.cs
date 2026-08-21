@@ -99,6 +99,7 @@ namespace BallisticSniper
         private Text reticleInfoText;
         private Text modeText;
         private RectTransform breathFillRect;
+        private Button startButton;
         private Button fireButton;
         private Text fireButtonText;
         private Text briefingKicker;
@@ -134,6 +135,11 @@ namespace BallisticSniper
             }
         }
         public float CanvasHeight => safeRoot != null && safeRoot.rect.height > 1f ? safeRoot.rect.height : 1080f;
+        public Button StartButtonForTests => startButton;
+        public Button BriefingEnterButtonForTests => briefingEnterButton;
+        public bool IsGameplayVisible => gameplayRoot != null && gameplayRoot.activeInHierarchy;
+        public bool IsScopeVisible => scopeLayer != null && scopeLayer.activeInHierarchy;
+        public bool IsBriefingVisible => briefingRoot != null && briefingRoot.activeInHierarchy;
 
         public void Initialize(BallisticGame owner)
         {
@@ -194,8 +200,8 @@ namespace BallisticSniper
         public void ShowBriefing(int stage, StageDefinition definition, float wind, BallisticSolution solution)
         {
             SetRoots(briefing: true);
-            briefingEnterButton.interactable = false;
-            SetButtonLabel(briefingEnterButton, "ПОДГОТОВКА...");
+            briefingEnterButton.interactable = true;
+            SetButtonLabel(briefingEnterButton, "НА РУБЕЖ");
             briefingKicker.text = "РУБЕЖ " + (stage + 1) + " / " + GameRules.Stages;
             briefingTitle.text = definition.Name;
             briefingNote.text = definition.Note;
@@ -207,12 +213,6 @@ namespace BallisticSniper
                 solution.TimeSeconds,
                 solution.ElevationMil,
                 FormatWindage((float)-solution.WindMil));
-        }
-
-        public void SetBriefingReady()
-        {
-            briefingEnterButton.interactable = true;
-            SetButtonLabel(briefingEnterButton, "НА РУБЕЖ");
         }
 
         public void ShowGameplay(HudSnapshot snapshot, bool flight)
@@ -422,10 +422,10 @@ namespace BallisticSniper
             CreateText(menuRoot.transform, "Mode Label", new Vector2(0.078f, 0.32f), new Vector2(0.30f, 0.365f), 17, TextAnchor.MiddleLeft, Paper).text = "РЕЖИМ";
 
             highScoreText = CreateText(menuRoot.transform, "High Score", new Vector2(0.70f, 0.67f), new Vector2(0.94f, 0.73f), 22, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
-            Button start = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
-            start.GetComponentInChildren<Text>().fontSize = 31;
+            startButton = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
+            startButton.GetComponentInChildren<Text>().fontSize = 31;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.0.4  •  Без рекламы  •  Без интернета  •  Без регистрации";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.1.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()

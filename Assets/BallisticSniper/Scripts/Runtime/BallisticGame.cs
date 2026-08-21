@@ -41,7 +41,6 @@ namespace BallisticSniper
         private bool demolitionBonusAwarded;
         private bool bonusMode;
         private bool campaignStarting;
-        private bool stageReady;
 
         private float range;
         private float baseWind;
@@ -90,6 +89,7 @@ namespace BallisticSniper
 
         public static BallisticGame Instance { get; private set; }
         public float CurrentWind => currentWind;
+        public GameScreen CurrentScreen => screen;
 
         private void Awake()
         {
@@ -162,6 +162,11 @@ namespace BallisticSniper
             }
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
+
         public void SetDifficulty(Difficulty selected)
         {
             if (screen != GameScreen.Menu) return;
@@ -184,15 +189,12 @@ namespace BallisticSniper
             hitCount = 0;
             successfulShots = 0;
             destroyedCount = 0;
-            stageReady = false;
             campaignStarting = true;
 
             ConfigureStage(false);
-            screen = GameScreen.Briefing;
-            ShowBriefing();
 
-            // The first range is already created in Awake. Rebuilding the same
-            // runtime scene here can strand Android on the preparation screen.
+            // The first range is already created in Awake. A restart from the
+            // summary may still need to restore stage zero.
             if (worldStageIndex != stage)
             {
                 world.BuildStage(stage, difficulty);
@@ -200,9 +202,13 @@ namespace BallisticSniper
                 ResetCameraForBriefing();
             }
 
-            stageReady = true;
             campaignStarting = false;
-            hud.SetBriefingReady();
+
+            // START now means start: enter the scope in the same invocation.
+            // There is no asynchronous preparation state that Android can
+            // leave disabled. Briefings remain between later campaign stages.
+            screen = GameScreen.Briefing;
+            EnterRange();
         }
 
         public void RestartCampaign() => StartCampaign();
@@ -232,7 +238,6 @@ namespace BallisticSniper
 
             Time.timeScale = 1f;
             campaignStarting = false;
-            stageReady = false;
             StopTransientShot();
             screen = GameScreen.Menu;
             holdingBreath = false;
@@ -243,7 +248,7 @@ namespace BallisticSniper
 
         public void EnterRange()
         {
-            if (screen != GameScreen.Briefing || !stageReady) return;
+            if (screen != GameScreen.Briefing) return;
             screen = GameScreen.Playing;
             ResetAim();
             UpdateWind();
@@ -418,7 +423,11 @@ namespace BallisticSniper
             QualitySettings.shadowDistance = 1200f;
             QualitySettings.shadowResolution = ShadowResolution.High;
             QualitySettings.shadows = ShadowQuality.All;
-            QualitySettings.pixelLightCount = 4;
+            QualitySettings.shadowCascades = 4;
+            QualitySettings.shadowProjection = ShadowProjection.StableFit;
+            QualitySettings.pixelLightCount = 6;
+            QualitySettings.lodBias = Mathf.Max(QualitySettings.lodBias, 1.65f);
+            QualitySettings.maximumLODLevel = 0;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Input.multiTouchEnabled = true;
             if (Application.isMobilePlatform)
@@ -443,6 +452,7 @@ namespace BallisticSniper
             playerCamera.allowMSAA = true;
             playerCamera.depthTextureMode = DepthTextureMode.Depth;
             playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
+            playerCamera.gameObject.AddComponent<SceneToneMapper>();
         }
 
         private void CreateWorld()

@@ -11,6 +11,7 @@ namespace BallisticSniper
         private MaterialLibrary materials;
         private Transform stageRoot;
         private Light sun;
+        private Light skyFill;
         private Material skyboxMaterial;
         private int currentStage;
         private float currentRange;
@@ -37,6 +38,7 @@ namespace BallisticSniper
             ConfigureAtmosphere(currentStage);
             CreateTerrain(currentStage, currentRange);
             CreateEnvironment(currentStage, currentRange);
+            CreateGroundScatter(currentStage, currentRange);
             CreateRangeFurniture(currentStage, currentRange);
             CreateTargets(definition, difficulty);
         }
@@ -148,8 +150,15 @@ namespace BallisticSniper
             sun.shadowStrength = 0.82f;
             sun.shadowBias = 0.045f;
             sun.shadowNormalBias = 0.35f;
-            sun.intensity = 1.15f;
+            sun.intensity = 1.45f;
             RenderSettings.sun = sun;
+
+            GameObject fillObject = new GameObject("Sky Fill Light");
+            fillObject.transform.SetParent(transform, false);
+            skyFill = fillObject.AddComponent<Light>();
+            skyFill.type = LightType.Directional;
+            skyFill.shadows = LightShadows.None;
+            skyFill.intensity = 0.32f;
 
             Shader skyShader = Shader.Find("Skybox/Procedural");
             if (skyShader != null)
@@ -163,19 +172,19 @@ namespace BallisticSniper
         {
             Color[] skyTints =
             {
-                new Color(0.58f, 0.56f, 0.49f),
-                new Color(0.45f, 0.59f, 0.62f),
-                new Color(0.69f, 0.50f, 0.36f),
-                new Color(0.43f, 0.50f, 0.52f),
-                new Color(0.52f, 0.65f, 0.78f)
+                new Color(0.56f, 0.68f, 0.82f),
+                new Color(0.53f, 0.70f, 0.72f),
+                new Color(0.78f, 0.57f, 0.40f),
+                new Color(0.50f, 0.60f, 0.65f),
+                new Color(0.62f, 0.75f, 0.88f)
             };
             Color[] fogColors =
             {
-                new Color(0.50f, 0.55f, 0.50f),
-                new Color(0.49f, 0.59f, 0.59f),
-                new Color(0.58f, 0.47f, 0.39f),
-                new Color(0.37f, 0.43f, 0.43f),
-                new Color(0.68f, 0.75f, 0.80f)
+                new Color(0.62f, 0.67f, 0.68f),
+                new Color(0.56f, 0.67f, 0.64f),
+                new Color(0.67f, 0.53f, 0.41f),
+                new Color(0.44f, 0.51f, 0.53f),
+                new Color(0.74f, 0.81f, 0.86f)
             };
             Color[] sunColors =
             {
@@ -187,25 +196,33 @@ namespace BallisticSniper
             };
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = skyTints[stage] * 0.72f;
-            RenderSettings.ambientEquatorColor = fogColors[stage] * 0.62f;
-            RenderSettings.ambientGroundColor = fogColors[stage] * 0.30f;
+            RenderSettings.ambientIntensity = 1.18f;
+            RenderSettings.ambientSkyColor = skyTints[stage] * 0.95f;
+            RenderSettings.ambientEquatorColor = fogColors[stage] * 0.78f;
+            RenderSettings.ambientGroundColor = fogColors[stage] * 0.48f;
+            RenderSettings.reflectionIntensity = 0.72f;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = fogColors[stage];
-            RenderSettings.fogStartDistance = currentRange * 0.58f;
-            RenderSettings.fogEndDistance = currentRange + 420f;
+            RenderSettings.fogStartDistance = currentRange * 0.72f;
+            RenderSettings.fogEndDistance = currentRange + 520f;
 
             sun.color = sunColors[stage];
-            sun.intensity = stage == 0 ? 1.35f : 1.08f;
-            sun.transform.rotation = Quaternion.Euler(22f + stage * 5f, -38f + stage * 19f, 0f);
+            sun.intensity = stage == 0 ? 1.62f : 1.28f;
+            float sunYaw = -38f + stage * 19f;
+            sun.transform.rotation = Quaternion.Euler(28f + stage * 4f, sunYaw, 0f);
+            skyFill.color = Color.Lerp(skyTints[stage], Color.white, 0.18f);
+            skyFill.intensity = stage == 3 ? 0.24f : 0.34f;
+            skyFill.transform.rotation = Quaternion.Euler(48f, sunYaw + 165f, 0f);
 
             if (skyboxMaterial != null)
             {
                 skyboxMaterial.SetColor("_SkyTint", skyTints[stage]);
-                skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.58f);
-                skyboxMaterial.SetFloat("_AtmosphereThickness", stage == 0 ? 1.4f : 0.92f);
-                skyboxMaterial.SetFloat("_SunSize", 0.045f);
+                skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.72f);
+                skyboxMaterial.SetFloat("_AtmosphereThickness", stage == 0 ? 1.10f : 0.92f);
+                skyboxMaterial.SetFloat("_SunSize", 0.035f);
+                skyboxMaterial.SetFloat("_SunSizeConvergence", 4.5f);
+                skyboxMaterial.SetFloat("_Exposure", stage == 3 ? 1.05f : 1.24f);
             }
         }
 
@@ -289,8 +306,8 @@ namespace BallisticSniper
             switch (stage)
             {
                 case 0:
-                    CreateDistantRocks(range, 34, MaterialLibrary.Surface.Granite, new Color(0.74f, 0.70f, 0.62f), 28f, 3f, 12f);
-                    CreateTreeLine(range, 24, false);
+                    CreateDistantRocks(range, 42, MaterialLibrary.Surface.Granite, new Color(0.74f, 0.70f, 0.62f), 40f, 1.4f, 7.5f);
+                    CreateTreeLine(range, 30, false);
                     break;
                 case 1:
                     CreateDistantRocks(range, 42, MaterialLibrary.Surface.Grass, new Color(0.63f, 0.74f, 0.50f), 35f, 5f, 20f);
@@ -308,6 +325,88 @@ namespace BallisticSniper
                     break;
             }
             Random.state = oldState;
+        }
+
+        private void CreateGroundScatter(int stage, float range)
+        {
+            Random.State oldState = Random.state;
+            Random.InitState(8171 + stage * 1301);
+            Material stone = materials.Get(
+                stage == 2 ? MaterialLibrary.Surface.Sandstone : MaterialLibrary.Surface.Granite,
+                stage == 4 ? new Color(0.86f, 0.91f, 0.94f) : new Color(0.62f, 0.59f, 0.52f),
+                0f,
+                0.10f,
+                "_GroundScatter");
+            Material scrub = materials.Get(
+                stage == 4 ? MaterialLibrary.Surface.Snow : MaterialLibrary.Surface.Grass,
+                stage == 2 ? new Color(0.48f, 0.38f, 0.20f) : new Color(0.42f, 0.52f, 0.28f),
+                0f,
+                0.14f,
+                "_GroundScatter");
+
+            int stoneCount = stage == 3 ? 28 : 62;
+            float depth = Mathf.Min(180f, range * 0.72f);
+            for (int i = 0; i < stoneCount; i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                float z = Random.Range(7f, depth);
+                float x = side * Random.Range(6.5f, 72f);
+                float size = Random.Range(0.10f, 0.52f) * Mathf.Lerp(0.75f, 1.35f, z / depth);
+                float groundY = SampleTerrainHeight(stage, range, x, z);
+                GameObject pebble = CreatePrimitive(
+                    PrimitiveType.Sphere,
+                    "Ground Stone",
+                    stageRoot,
+                    new Vector3(x, groundY + size * 0.20f, z),
+                    new Vector3(size * Random.Range(0.7f, 1.45f), size * Random.Range(0.28f, 0.65f), size),
+                    stone,
+                    Random.rotation,
+                    false);
+                Renderer pebbleRenderer = pebble.GetComponent<Renderer>();
+                if (pebbleRenderer != null) pebbleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
+
+            if (stage != 3)
+            {
+                int scrubCount = stage == 4 ? 22 : 38;
+                for (int i = 0; i < scrubCount; i++)
+                {
+                    float side = i % 2 == 0 ? -1f : 1f;
+                    float z = Random.Range(12f, depth);
+                    float x = side * Random.Range(10f, 86f);
+                    float size = Random.Range(0.24f, 0.75f);
+                    float groundY = SampleTerrainHeight(stage, range, x, z);
+                    GameObject tuft = CreatePrimitive(
+                        PrimitiveType.Sphere,
+                        "Range Scrub",
+                        stageRoot,
+                        new Vector3(x, groundY + size * 0.32f, z),
+                        new Vector3(size, size * 0.52f, size * Random.Range(0.70f, 1.25f)),
+                        scrub,
+                        Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                        false);
+                    Renderer tuftRenderer = tuft.GetComponent<Renderer>();
+                    if (tuftRenderer != null) tuftRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                }
+            }
+
+            Random.state = oldState;
+        }
+
+        private static float SampleTerrainHeight(int stage, float range, float worldX, float worldZ)
+        {
+            const float width = 520f;
+            float length = range + 330f;
+            float x01 = Mathf.Clamp01(worldX / width + 0.5f);
+            float z01 = Mathf.Clamp01((worldZ + 24f) / length);
+            float amplitude = stage == 1 ? 15f : stage == 2 ? 22f : stage == 4 ? 18f : 5f;
+            float noise = (Mathf.PerlinNoise(x01 * 7.5f + stage * 2.7f, z01 * 11.5f + stage) - 0.5f) * 2f;
+            float laneFlatten = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((Mathf.Abs(worldX) - 17f) / 90f));
+            float stageShape = stage == 1 || stage == 2 || stage == 4
+                ? Mathf.Pow(Mathf.Clamp01(Mathf.Abs(worldX) / (width * 0.5f)), 1.35f) * amplitude * 1.8f
+                : 0f;
+            float height = noise * amplitude * 0.25f * laneFlatten + stageShape;
+            return stage == 3 ? height * 0.16f : height;
         }
 
         private void CreateDistantRocks(float range, int count, MaterialLibrary.Surface surface, Color tint, float sideOffset, float minScale, float maxScale)
@@ -523,6 +622,16 @@ namespace BallisticSniper
                 renderer.sharedMaterial = material;
                 renderer.shadowCastingMode = ShadowCastingMode.On;
                 renderer.receiveShadows = true;
+                if (material != null && material.HasProperty("_Tiling"))
+                {
+                    float width = Mathf.Max(Mathf.Abs(localScale.x), Mathf.Abs(localScale.z));
+                    float height = Mathf.Max(Mathf.Abs(localScale.y), Mathf.Min(width, 4f));
+                    float repeatX = Mathf.Max(1f, width * (type == PrimitiveType.Cube ? 0.30f : 0.16f));
+                    float repeatY = Mathf.Max(1f, height * (type == PrimitiveType.Cube ? 0.30f : 0.16f));
+                    MaterialPropertyBlock properties = new MaterialPropertyBlock();
+                    properties.SetVector("_Tiling", new Vector4(repeatX, repeatY, 0f, 0f));
+                    renderer.SetPropertyBlock(properties);
+                }
             }
             Collider foundCollider = gameObject.GetComponent<Collider>();
             if (foundCollider != null) foundCollider.enabled = collider;
