@@ -68,6 +68,7 @@ def main() -> int:
         "ProjectSettings/EditorBuildSettings.asset",
         "Assets/BallisticSniper/Scenes/BallisticSniper.unity",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/GradientSky.shader",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader",
         "Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs",
         "Assets/BallisticSniper/Scripts/Runtime/Ballistics.cs",
@@ -137,14 +138,20 @@ def main() -> int:
 
     rendering = require("Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs").read_text(encoding="utf-8")
     atlas_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader").read_text(encoding="utf-8")
+    grade_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader").read_text(encoding="utf-8")
     render_tokens = (
         "Sky Fill Light",
         "CreateGroundScatter",
-        "RenderSettings.ambientIntensity = 1.18f",
+        "BallisticSniper/Shaders/GradientSky",
+        "RenderSettings.ambientIntensity = 1.0f",
         "MaterialPropertyBlock",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
-    if any(token not in rendering for token in render_tokens) or any(token not in atlas_shader for token in shader_tokens):
+    grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 0.94f')
+    tone_mapper = require("Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs").read_text(encoding="utf-8")
+    if (any(token not in rendering for token in render_tokens) or
+            any(token not in atlas_shader for token in shader_tokens) or
+            grade_tokens[0] not in grade_shader or grade_tokens[1] not in tone_mapper):
         raise AssertionError("lighting, texture relief, or material tiling upgrade is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
@@ -155,9 +162,13 @@ def main() -> int:
         "Difficulty.Expert",
         "Is.EqualTo(GameScreen.Playing)",
         "runtime-world-v3.1.0.png",
+        "Sky has a yellow/red colour cast",
+        "Terrain is oversaturated orange",
     )
     if any(token not in playmode_test for token in test_tokens):
         raise AssertionError("real Unity campaign launch/render smoke test is missing")
+    if "WaitForEndOfFrame" in without_strings_and_comments(playmode_test):
+        raise AssertionError("batch-mode render smoke test can hang on WaitForEndOfFrame")
 
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (

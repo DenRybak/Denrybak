@@ -150,7 +150,7 @@ namespace BallisticSniper
             sun.shadowStrength = 0.82f;
             sun.shadowBias = 0.045f;
             sun.shadowNormalBias = 0.35f;
-            sun.intensity = 1.45f;
+            sun.intensity = 1.18f;
             RenderSettings.sun = sun;
 
             GameObject fillObject = new GameObject("Sky Fill Light");
@@ -158,9 +158,11 @@ namespace BallisticSniper
             skyFill = fillObject.AddComponent<Light>();
             skyFill.type = LightType.Directional;
             skyFill.shadows = LightShadows.None;
-            skyFill.intensity = 0.32f;
+            skyFill.intensity = 0.20f;
 
-            Shader skyShader = Shader.Find("Skybox/Procedural");
+            Shader skyShader = Resources.Load<Shader>("BallisticSniper/Shaders/GradientSky") ??
+                               Shader.Find("BallisticSniper/GradientSky") ??
+                               Shader.Find("Skybox/Procedural");
             if (skyShader != null)
             {
                 skyboxMaterial = new Material(skyShader) { name = "Runtime Procedural Sky" };
@@ -170,37 +172,45 @@ namespace BallisticSniper
 
         private void ConfigureAtmosphere(int stage)
         {
-            Color[] skyTints =
+            Color[] zenithColors =
             {
-                new Color(0.56f, 0.68f, 0.82f),
-                new Color(0.53f, 0.70f, 0.72f),
-                new Color(0.78f, 0.57f, 0.40f),
-                new Color(0.50f, 0.60f, 0.65f),
-                new Color(0.62f, 0.75f, 0.88f)
+                new Color(0.055f, 0.14f, 0.30f),
+                new Color(0.045f, 0.17f, 0.21f),
+                new Color(0.075f, 0.15f, 0.28f),
+                new Color(0.035f, 0.08f, 0.14f),
+                new Color(0.075f, 0.18f, 0.36f)
+            };
+            Color[] horizonColors =
+            {
+                new Color(0.34f, 0.44f, 0.52f),
+                new Color(0.28f, 0.40f, 0.38f),
+                new Color(0.46f, 0.30f, 0.18f),
+                new Color(0.20f, 0.27f, 0.30f),
+                new Color(0.40f, 0.49f, 0.58f)
             };
             Color[] fogColors =
             {
-                new Color(0.62f, 0.67f, 0.68f),
-                new Color(0.56f, 0.67f, 0.64f),
-                new Color(0.67f, 0.53f, 0.41f),
-                new Color(0.44f, 0.51f, 0.53f),
-                new Color(0.74f, 0.81f, 0.86f)
+                new Color(0.26f, 0.31f, 0.35f),
+                new Color(0.24f, 0.34f, 0.31f),
+                new Color(0.40f, 0.27f, 0.17f),
+                new Color(0.18f, 0.23f, 0.26f),
+                new Color(0.39f, 0.47f, 0.56f)
             };
             Color[] sunColors =
             {
-                new Color(1.00f, 0.68f, 0.42f),
-                new Color(1.00f, 0.91f, 0.70f),
-                new Color(1.00f, 0.77f, 0.55f),
-                new Color(0.88f, 0.94f, 1.00f),
-                new Color(0.92f, 0.96f, 1.00f)
+                new Color(1.00f, 0.88f, 0.72f),
+                new Color(1.00f, 0.94f, 0.84f),
+                new Color(1.00f, 0.84f, 0.66f),
+                new Color(0.82f, 0.90f, 1.00f),
+                new Color(0.91f, 0.96f, 1.00f)
             };
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientIntensity = 1.18f;
-            RenderSettings.ambientSkyColor = skyTints[stage] * 0.95f;
-            RenderSettings.ambientEquatorColor = fogColors[stage] * 0.78f;
-            RenderSettings.ambientGroundColor = fogColors[stage] * 0.48f;
-            RenderSettings.reflectionIntensity = 0.72f;
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.ambientSkyColor = Color.Lerp(zenithColors[stage], horizonColors[stage], 0.42f);
+            RenderSettings.ambientEquatorColor = horizonColors[stage] * 0.56f;
+            RenderSettings.ambientGroundColor = fogColors[stage] * 0.36f;
+            RenderSettings.reflectionIntensity = 0.48f;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = fogColors[stage];
@@ -208,21 +218,33 @@ namespace BallisticSniper
             RenderSettings.fogEndDistance = currentRange + 520f;
 
             sun.color = sunColors[stage];
-            sun.intensity = stage == 0 ? 1.62f : 1.28f;
+            sun.intensity = stage == 0 ? 1.18f : 1.12f;
             float sunYaw = -38f + stage * 19f;
             sun.transform.rotation = Quaternion.Euler(28f + stage * 4f, sunYaw, 0f);
-            skyFill.color = Color.Lerp(skyTints[stage], Color.white, 0.18f);
-            skyFill.intensity = stage == 3 ? 0.24f : 0.34f;
+            skyFill.color = Color.Lerp(horizonColors[stage], Color.white, 0.12f);
+            skyFill.intensity = stage == 3 ? 0.14f : 0.20f;
             skyFill.transform.rotation = Quaternion.Euler(48f, sunYaw + 165f, 0f);
 
             if (skyboxMaterial != null)
             {
-                skyboxMaterial.SetColor("_SkyTint", skyTints[stage]);
-                skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.72f);
-                skyboxMaterial.SetFloat("_AtmosphereThickness", stage == 0 ? 1.10f : 0.92f);
-                skyboxMaterial.SetFloat("_SunSize", 0.035f);
-                skyboxMaterial.SetFloat("_SunSizeConvergence", 4.5f);
-                skyboxMaterial.SetFloat("_Exposure", stage == 3 ? 1.05f : 1.24f);
+                if (skyboxMaterial.HasProperty("_HorizonColor"))
+                {
+                    skyboxMaterial.SetColor("_HorizonColor", horizonColors[stage]);
+                    skyboxMaterial.SetColor("_ZenithColor", zenithColors[stage]);
+                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    skyboxMaterial.SetColor("_SunColor", sunColors[stage]);
+                    skyboxMaterial.SetVector("_SunDirection", -sun.transform.forward);
+                    skyboxMaterial.SetFloat("_SunIntensity", stage == 2 ? 0.34f : 0.42f);
+                }
+                else
+                {
+                    skyboxMaterial.SetColor("_SkyTint", zenithColors[stage]);
+                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    skyboxMaterial.SetFloat("_AtmosphereThickness", 0.68f);
+                    skyboxMaterial.SetFloat("_SunSize", 0.025f);
+                    skyboxMaterial.SetFloat("_SunSizeConvergence", 5.0f);
+                    skyboxMaterial.SetFloat("_Exposure", 0.82f);
+                }
             }
         }
 
