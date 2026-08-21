@@ -66,7 +66,10 @@ namespace BallisticSniper.Tests
 
         private static IEnumerator CaptureAndValidateWorldFrame()
         {
-            yield return new WaitForEndOfFrame();
+            // WaitForEndOfFrame is never resumed by the Unity Editor in
+            // command-line batch mode. One regular frame is enough because
+            // the camera is rendered explicitly below.
+            yield return null;
 
             Camera camera = Object.FindObjectOfType<Camera>();
             Assert.That(camera, Is.Not.Null, "Sniper camera is missing");
