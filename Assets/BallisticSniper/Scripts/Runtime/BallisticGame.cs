@@ -39,6 +39,7 @@ namespace BallisticSniper
         private int destructionStreak;
         private bool demolitionBonusAwarded;
         private bool bonusMode;
+        private bool preparedMenuStage;
 
         private float range;
         private float baseWind;
@@ -110,6 +111,7 @@ namespace BallisticSniper
             CreateKillCam();
 
             world.BuildStage(0, difficulty);
+            preparedMenuStage = true;
             ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
         }
@@ -169,6 +171,13 @@ namespace BallisticSniper
 
         public void StartCampaign()
         {
+            if (screen != GameScreen.Menu && screen != GameScreen.Summary) return;
+
+            // The first range is already built behind the main menu. Reusing
+            // it makes the initial transition immediate on mobile instead of
+            // destroying and recreating the complete 3D range before the
+            // briefing can appear.
+            bool reusePreparedStage = screen == GameScreen.Menu && preparedMenuStage;
             Time.timeScale = 1f;
             stage = 0;
             shotInStage = 0;
@@ -177,7 +186,8 @@ namespace BallisticSniper
             hitCount = 0;
             successfulShots = 0;
             destroyedCount = 0;
-            ConfigureStage();
+            ConfigureStage(!reusePreparedStage);
+            preparedMenuStage = false;
             screen = GameScreen.Briefing;
             ShowBriefing();
         }
@@ -191,14 +201,30 @@ namespace BallisticSniper
             hud.ShowHelp();
         }
 
+        public void CloseHelp()
+        {
+            if (screen != GameScreen.Help) return;
+            screen = GameScreen.Menu;
+            ResetCameraForMenu();
+            hud.ShowMenu(highScore, difficulty);
+        }
+
         public void OpenMenu()
         {
+            if (screen == GameScreen.Help)
+            {
+                CloseHelp();
+                return;
+            }
+
             Time.timeScale = 1f;
             StopTransientShot();
             screen = GameScreen.Menu;
             holdingBreath = false;
             stage = 0;
-            world.BuildStage(0, difficulty);
+            // Menu navigation must be immediate. The first range is rebuilt
+            // only when a new campaign actually starts.
+            preparedMenuStage = false;
             ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
         }
@@ -447,7 +473,7 @@ namespace BallisticSniper
             killCam.Initialize(playerCamera, bulletMaterial);
         }
 
-        private void ConfigureStage()
+        private void ConfigureStage(bool rebuildWorld = true)
         {
             StageDefinition definition = GameRules.StageDefinitions[stage];
             range = definition.RangeMetres;
@@ -479,7 +505,7 @@ namespace BallisticSniper
             currentWind = baseWind;
             displayedSolution = Ballistics.Solve(range, currentWind);
 
-            world.BuildStage(stage, difficulty);
+            if (rebuildWorld) world.BuildStage(stage, difficulty);
             ResetAim();
             ResetCameraForBriefing();
         }
@@ -947,7 +973,8 @@ namespace BallisticSniper
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (screen == GameScreen.Menu) return;
-                if (screen == GameScreen.Help || screen == GameScreen.Summary) OpenMenu();
+                if (screen == GameScreen.Help) CloseHelp();
+                else if (screen == GameScreen.Briefing || screen == GameScreen.Summary) OpenMenu();
                 else TogglePause();
             }
 
