@@ -342,8 +342,9 @@ namespace BallisticSniper
             screen = GameScreen.Flight;
             acceptedShotCount++;
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
-                "BALLISTIC_ANDROID_FIRE_ACCEPTED shot={0} wind={1:+0.00;-0.00;0.00} impactX={2:+0.000;-0.000;0.000} opticalX={3:+0.000;-0.000;0.000}",
-                acceptedShotCount, currentWind, impact.x, opticalAimPoint.x));
+                "BALLISTIC_ANDROID_FIRE_ACCEPTED shot={0} wind={1:+0.00;-0.00;0.00} impact={2:+0.000;-0.000;0.000},{3:+0.000;-0.000;0.000} optical={4:+0.000;-0.000;0.000},{5:+0.000;-0.000;0.000} elev={6:0.0} windage={7:+0.0;-0.0;0.0}",
+                acceptedShotCount, currentWind, impact.x, impact.y, opticalAimPoint.x, opticalAimPoint.y,
+                elevationDialMil, windageDialMil));
 
             recoilMilX = 0.06f + Random.value * 0.08f;
             recoilMilY = 0.18f + Random.value * 0.09f;
@@ -797,6 +798,10 @@ namespace BallisticSniper
             score += lastShotScore;
             totalShots++;
             shotInStage++;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_SHOT_RESOLVED score={0} bullseye={1} error={2:+0.000;-0.000;0.000},{3:+0.000;-0.000;0.000} target={4:+0.000;-0.000;0.000},{5:+0.000;-0.000;0.000}",
+                lastShotScore, lastBullseye, lastError.x, lastError.y,
+                currentShot.TargetCentre.x, currentShot.TargetCentre.y));
             CalculateReview();
             if (!lastBullseye) SpawnImpactMarker();
 

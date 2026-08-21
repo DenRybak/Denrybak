@@ -103,11 +103,14 @@ namespace BallisticSniper.Tests
             Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Flight));
 
             float deadline = Time.realtimeSinceStartup + 8f;
+            bool sawCinematic = false;
             while (!game.IsResultReadyForTests && Time.realtimeSinceStartup < deadline)
             {
+                if (game.CurrentScreen == GameScreen.Cinematic) sawCinematic = true;
                 yield return null;
             }
             Assert.That(game.IsResultReadyForTests, Is.True, "The shot never reached its review result");
+            Assert.That(sawCinematic, Is.True, "The corrected centre shot did not enter the impact cinematic");
             Assert.That(hud.IsResultVisible, Is.True);
             Assert.That(hud.IsGameplayVisible, Is.False, "Gameplay HUD remained under the result action");
             Assert.That(hud.FireButtonForTests.gameObject.activeInHierarchy, Is.False,

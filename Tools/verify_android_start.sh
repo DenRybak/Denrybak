@@ -63,6 +63,10 @@ test "$screen_width" -gt "$screen_height"
 
 # The START button occupies x=0.72..0.93 and y=0.51..0.66 in Unity's
 # bottom-left coordinate system. adb uses a top-left origin.
+cadet_x=$((screen_width * 150 / 1000))
+cadet_y=$((screen_height * 755 / 1000))
+adb shell input tap "$cadet_x" "$cadet_y"
+sleep 0.40
 tap_x=$((screen_width * 825 / 1000))
 tap_y=$((screen_height * 415 / 1000))
 adb logcat -c
@@ -83,6 +87,7 @@ adb exec-out screencap -p > "$RESULTS_DIR/android-gameplay-after-tap.png"
 adb shell dumpsys activity activities > "$RESULTS_DIR/android-activity.txt"
 adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-app-logcat.txt"
 test "$started" -eq 1
+grep -Fq "difficulty=Cadet" "$RESULTS_DIR/android-logcat.txt"
 grep -Fq "$PACKAGE_NAME" "$RESULTS_DIR/android-activity.txt"
 if grep -Eq "Can't add component because class|ArgumentNullException|NullReferenceException|MissingReferenceException|MissingComponentException|FATAL EXCEPTION" \
     "$RESULTS_DIR/android-app-logcat.txt"; then
