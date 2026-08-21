@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
@@ -26,6 +25,7 @@ namespace BallisticSniper
         private GameScreen resumeScreen = GameScreen.Playing;
         private Difficulty difficulty;
         private int stage;
+        private int worldStageIndex = -1;
         private int zoomIndex;
         private int shotInStage;
         private int totalShots;
@@ -42,7 +42,6 @@ namespace BallisticSniper
         private bool bonusMode;
         private bool campaignStarting;
         private bool stageReady;
-        private Coroutine prepareCampaignRoutine;
 
         private float range;
         private float baseWind;
@@ -114,6 +113,7 @@ namespace BallisticSniper
             CreateKillCam();
 
             world.BuildStage(0, difficulty);
+            worldStageIndex = 0;
             ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
         }
@@ -187,26 +187,21 @@ namespace BallisticSniper
             stageReady = false;
             campaignStarting = true;
 
-            // Change the visible screen before any 3D range work. On Android
-            // this makes START respond immediately and avoids a silent-looking
-            // pause while the selected difficulty is prepared.
             ConfigureStage(false);
             screen = GameScreen.Briefing;
             ShowBriefing();
 
-            if (prepareCampaignRoutine != null) StopCoroutine(prepareCampaignRoutine);
-            prepareCampaignRoutine = StartCoroutine(PrepareCampaignStage());
-        }
+            // The first range is already created in Awake. Rebuilding the same
+            // runtime scene here can strand Android on the preparation screen.
+            if (worldStageIndex != stage)
+            {
+                world.BuildStage(stage, difficulty);
+                worldStageIndex = stage;
+                ResetCameraForBriefing();
+            }
 
-        private IEnumerator PrepareCampaignStage()
-        {
-            // Let Unity render the briefing once before rebuilding the range.
-            yield return null;
-            world.BuildStage(stage, difficulty);
-            ResetCameraForBriefing();
             stageReady = true;
             campaignStarting = false;
-            prepareCampaignRoutine = null;
             hud.SetBriefingReady();
         }
 
@@ -236,11 +231,6 @@ namespace BallisticSniper
             }
 
             Time.timeScale = 1f;
-            if (prepareCampaignRoutine != null)
-            {
-                StopCoroutine(prepareCampaignRoutine);
-                prepareCampaignRoutine = null;
-            }
             campaignStarting = false;
             stageReady = false;
             StopTransientShot();
@@ -527,7 +517,11 @@ namespace BallisticSniper
             currentWind = baseWind;
             displayedSolution = Ballistics.Solve(range, currentWind);
 
-            if (rebuildWorld) world.BuildStage(stage, difficulty);
+            if (rebuildWorld)
+            {
+                world.BuildStage(stage, difficulty);
+                worldStageIndex = stage;
+            }
             ResetAim();
             ResetCameraForBriefing();
         }

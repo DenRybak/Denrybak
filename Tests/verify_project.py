@@ -109,7 +109,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v3.0.3  •  Без рекламы',
+        '"v3.0.4  •  Без рекламы',
         "button.onClick.AddListener(binding.Invoke)",
         "Time.unscaledTime - lastInvokedAt < 0.30f",
     )
@@ -118,10 +118,11 @@ def main() -> int:
     game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
     flow_tokens = (
         "public void CloseHelp()",
-        "private IEnumerator PrepareCampaignStage()",
         "ConfigureStage(false)",
         "screen = GameScreen.Briefing;",
-        "yield return null;",
+        "private int worldStageIndex = -1;",
+        "if (worldStageIndex != stage)",
+        "worldStageIndex = stage;",
         "hud.SetBriefingReady();",
         "if (screen != GameScreen.Briefing || !stageReady) return;",
         "if (screen == GameScreen.Help) CloseHelp();",
@@ -170,7 +171,7 @@ def main() -> int:
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
     print("OK: Android buttons use debounced touch-down plus standard UI click fallback")
-    print("OK: START opens briefing immediately and prepares the selected range on the next frame")
+    print("OK: START reuses the loaded first range and enables briefing immediately")
     return 0
 
 
