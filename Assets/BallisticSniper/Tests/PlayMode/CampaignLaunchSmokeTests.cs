@@ -3,7 +3,6 @@ using System.IO;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
-using UnityEngine.UI;
 
 namespace BallisticSniper.Tests
 {
@@ -36,16 +35,18 @@ namespace BallisticSniper.Tests
                 }
 
                 game.SetDifficulty(difficulties[index]);
-                Button start = hud.StartButtonForTests;
-                Assert.That(start.gameObject.activeInHierarchy, Is.True);
-                Assert.That(start.interactable, Is.True);
-                start.onClick.Invoke();
+                Assert.That(hud.StartButtonForTests.gameObject.activeInHierarchy, Is.True);
+                Assert.That(hud.StartButtonForTests.interactable, Is.True);
+                if (index == 0) hud.TapStartThroughAndroidFallbackForTests();
+                else if (index == 1) hud.TapStartThroughPointerDownForTests();
+                else hud.TapStartThroughStandardClickForTests();
                 yield return null;
 
                 Assert.That(
                     game.CurrentScreen,
                     Is.EqualTo(GameScreen.Playing),
                     "START did not enter gameplay for " + difficulties[index]);
+                Assert.That(hud.IsMenuVisible, Is.False, "Main menu still covers gameplay");
                 Assert.That(hud.IsGameplayVisible, Is.True, "Gameplay HUD is hidden");
                 Assert.That(hud.IsScopeVisible, Is.True, "Scope is hidden");
                 Assert.That(hud.IsBriefingVisible, Is.False, "Briefing blocked gameplay");
@@ -139,7 +140,7 @@ namespace BallisticSniper.Tests
 
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../TestResults"));
             Directory.CreateDirectory(outputDirectory);
-            File.WriteAllBytes(Path.Combine(outputDirectory, "runtime-world-v3.1.0.png"), capture.EncodeToPNG());
+            File.WriteAllBytes(Path.Combine(outputDirectory, "runtime-world-v3.2.0.png"), capture.EncodeToPNG());
 
             camera.targetTexture = previousTarget;
             RenderTexture.active = previousActive;

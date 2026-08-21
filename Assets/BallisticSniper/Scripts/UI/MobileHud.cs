@@ -100,6 +100,7 @@ namespace BallisticSniper
         private Text modeText;
         private RectTransform breathFillRect;
         private Button startButton;
+        private ReliableButtonBinding startBinding;
         private Button fireButton;
         private Text fireButtonText;
         private Text briefingKicker;
@@ -140,6 +141,7 @@ namespace BallisticSniper
         public bool IsGameplayVisible => gameplayRoot != null && gameplayRoot.activeInHierarchy;
         public bool IsScopeVisible => scopeLayer != null && scopeLayer.activeInHierarchy;
         public bool IsBriefingVisible => briefingRoot != null && briefingRoot.activeInHierarchy;
+        public bool IsMenuVisible => menuRoot != null && menuRoot.activeInHierarchy;
 
         public void Initialize(BallisticGame owner)
         {
@@ -423,9 +425,10 @@ namespace BallisticSniper
 
             highScoreText = CreateText(menuRoot.transform, "High Score", new Vector2(0.70f, 0.67f), new Vector2(0.94f, 0.73f), 22, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
             startButton = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
+            startBinding = reliableButtons[reliableButtons.Count - 1];
             startButton.GetComponentInChildren<Text>().fontSize = 31;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.1.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.2.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()
@@ -614,9 +617,11 @@ namespace BallisticSniper
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             ReliableButtonBinding binding = new ReliableButtonBinding(button, action);
             reliableButtons.Add(binding);
+            ReliableTapReceiver pointerDown = buttonObject.AddComponent<ReliableTapReceiver>();
+            pointerDown.Pressed = binding.Invoke;
             // Keep Unity's standard pointer-up route as a second path. The
-            // direct touch-down dispatcher remains primary; the binding
-            // debounces both paths so a single tap cannot invoke twice.
+            // pointer-down receiver and global Android fallback are additional
+            // routes; the binding debounces all of them.
             if (action != null) button.onClick.AddListener(binding.Invoke);
             Text text = CreateText(buttonObject.transform, "Label", new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f),
                 21, TextAnchor.MiddleCenter, primary ? Ink : Paper, FontStyle.Bold);
@@ -644,6 +649,17 @@ namespace BallisticSniper
 
         private void InvokeButtonAt(Vector2 screenPosition)
         {
+            // START has a normalized safe-area hit zone as an Android fallback.
+            // It remains valid even when a device reports stale RectTransform
+            // geometry during a landscape orientation/safe-area transition.
+            if (game.CurrentScreen == GameScreen.Menu && startBinding != null && startBinding.CanInvoke &&
+                (RectTransformUtility.RectangleContainsScreenPoint(startBinding.Rect, screenPosition, null) ||
+                 IsStartZone(screenPosition)))
+            {
+                startBinding.Invoke();
+                return;
+            }
+
             for (int i = reliableButtons.Count - 1; i >= 0; i--)
             {
                 ReliableButtonBinding binding = reliableButtons[i];
@@ -652,6 +668,48 @@ namespace BallisticSniper
                 binding.Invoke();
                 return;
             }
+        }
+
+        private static bool IsStartZone(Vector2 screenPosition)
+        {
+            Rect safe = Screen.safeArea;
+            if (safe.width <= 1f || safe.height <= 1f)
+            {
+                safe = new Rect(0f, 0f, Mathf.Max(1f, Screen.width), Mathf.Max(1f, Screen.height));
+            }
+            float normalizedX = (screenPosition.x - safe.xMin) / safe.width;
+            float normalizedY = (screenPosition.y - safe.yMin) / safe.height;
+            return normalizedX >= 0.69f && normalizedX <= 0.96f &&
+                   normalizedY >= 0.48f && normalizedY <= 0.69f;
+        }
+
+        public void TapStartThroughAndroidFallbackForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            InvokeButtonAt(StartButtonScreenCentre());
+        }
+
+        public void TapStartThroughPointerDownForTests()
+        {
+            Canvas.ForceUpdateCanvases();
+            PointerEventData pointer = new PointerEventData(EventSystem.current)
+            {
+                button = PointerEventData.InputButton.Left,
+                position = StartButtonScreenCentre()
+            };
+            ExecuteEvents.Execute<IPointerDownHandler>(startButton.gameObject, pointer, ExecuteEvents.pointerDownHandler);
+        }
+
+        public void TapStartThroughStandardClickForTests()
+        {
+            startButton.onClick.Invoke();
+        }
+
+        private Vector2 StartButtonScreenCentre()
+        {
+            RectTransform rect = (RectTransform)startButton.transform;
+            Vector3 worldCentre = rect.TransformPoint(rect.rect.center);
+            return RectTransformUtility.WorldToScreenPoint(null, worldCentre);
         }
 
         private sealed class ReliableButtonBinding

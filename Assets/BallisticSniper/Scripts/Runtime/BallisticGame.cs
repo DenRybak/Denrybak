@@ -41,6 +41,7 @@ namespace BallisticSniper
         private bool demolitionBonusAwarded;
         private bool bonusMode;
         private bool campaignStarting;
+        private bool campaignPrepared;
 
         private float range;
         private float baseWind;
@@ -114,8 +115,9 @@ namespace BallisticSniper
 
             world.BuildStage(0, difficulty);
             worldStageIndex = 0;
-            ResetCameraForMenu();
+            PrepareCampaignForMenu(false);
             hud.ShowMenu(highScore, difficulty);
+            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu");
         }
 
         private void Update()
@@ -173,40 +175,41 @@ namespace BallisticSniper
 
         public void StartCampaign()
         {
-            if (campaignStarting) return;
-
-            Time.timeScale = 1f;
-            StopTransientShot();
-            stage = 0;
-            shotInStage = 0;
-            totalShots = 0;
-            score = 0;
-            hitCount = 0;
-            successfulShots = 0;
-            destroyedCount = 0;
+            if (screen != GameScreen.Menu || campaignStarting) return;
             campaignStarting = true;
-
-            ConfigureStage(false);
-
-            // The first range is already created in Awake. A restart from the
-            // summary may still need to restore stage zero.
-            if (worldStageIndex != stage)
+            try
             {
-                world.BuildStage(stage, difficulty);
-                worldStageIndex = stage;
-                ResetCameraForBriefing();
+                Time.timeScale = 1f;
+                if (!campaignPrepared) PrepareCampaignForMenu(true);
+
+                // Everything expensive is prepared while the menu is open.
+                // Hide the menu first, then update the camera and HUD. Even a
+                // device-specific rendering error can no longer leave START
+                // apparently stuck over a changed background.
+                screen = GameScreen.Playing;
+                campaignPrepared = false;
+                hud.ShowGameplay(BuildHudSnapshot(true), false);
+                ResetAim();
+                UpdateWind();
+                UpdatePlayerCamera();
+                RefreshGameplayHud(true);
+                Debug.Log("BALLISTIC_ANDROID_START_OK screen=" + screen +
+                          " menuVisible=" + hud.IsMenuVisible +
+                          " gameplayVisible=" + hud.IsGameplayVisible +
+                          " scopeVisible=" + hud.IsScopeVisible +
+                          " difficulty=" + difficulty);
             }
-
-            campaignStarting = false;
-
-            // START now means start: enter the scope in the same invocation.
-            // There is no asynchronous preparation state that Android can
-            // leave disabled. Briefings remain between later campaign stages.
-            screen = GameScreen.Briefing;
-            EnterRange();
+            finally
+            {
+                campaignStarting = false;
+            }
         }
 
-        public void RestartCampaign() => StartCampaign();
+        public void RestartCampaign()
+        {
+            OpenMenu();
+            StartCampaign();
+        }
 
         public void OpenHelp()
         {
@@ -236,9 +239,8 @@ namespace BallisticSniper
             StopTransientShot();
             screen = GameScreen.Menu;
             holdingBreath = false;
-            stage = 0;
-            ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
+            PrepareCampaignForMenu(true);
         }
 
         public void EnterRange()
@@ -488,6 +490,29 @@ namespace BallisticSniper
             killCam = gameObject.AddComponent<KillCamDirector>();
             Material bulletMaterial = world.Materials.Solid(new Color(1f, 0.67f, 0.12f), true, "_Tracer");
             killCam.Initialize(playerCamera, bulletMaterial);
+        }
+
+        private void PrepareCampaignForMenu(bool rebuildWorld)
+        {
+            Time.timeScale = 1f;
+            StopTransientShot();
+            stage = 0;
+            shotInStage = 0;
+            totalShots = 0;
+            score = 0;
+            hitCount = 0;
+            successfulShots = 0;
+            destroyedCount = 0;
+
+            if (rebuildWorld || worldStageIndex != stage)
+            {
+                world.BuildStage(stage, difficulty);
+                worldStageIndex = stage;
+            }
+
+            ConfigureStage(false);
+            campaignPrepared = true;
+            ResetCameraForMenu();
         }
 
         private void ConfigureStage(bool rebuildWorld = true)

@@ -78,6 +78,7 @@ def main() -> int:
         "Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs",
         "Assets/BallisticSniper/Scripts/UI/MobileHud.cs",
         "Assets/BallisticSniper/Scripts/UI/HudGraphics.cs",
+        "Tools/verify_android_start.sh",
     ]
     for relative in required:
         require(relative)
@@ -109,11 +110,15 @@ def main() -> int:
         "DispatchReliableTouches",
         "InvokeButtonAt(touch.position)",
         "RectTransformUtility.RectangleContainsScreenPoint",
+        "ReliableTapReceiver",
+        "IsStartZone(screenPosition)",
+        "TapStartThroughAndroidFallbackForTests",
+        "TapStartThroughPointerDownForTests",
         "button.targetGraphic = image",
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v3.1.0  •  Без рекламы',
+        '"v3.2.0  •  Без рекламы',
         "button.onClick.AddListener(binding.Invoke)",
         "Time.unscaledTime - lastInvokedAt < 0.30f",
     )
@@ -124,13 +129,15 @@ def main() -> int:
     game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
     flow_tokens = (
         "public void CloseHelp()",
+        "PrepareCampaignForMenu(false)",
+        "if (!campaignPrepared) PrepareCampaignForMenu(true);",
         "ConfigureStage(false)",
         "public GameScreen CurrentScreen => screen;",
-        "screen = GameScreen.Briefing;",
-        "EnterRange();",
-        "if (worldStageIndex != stage)",
+        "screen = GameScreen.Playing;",
+        "hud.ShowGameplay(BuildHudSnapshot(true), false);",
+        "BALLISTIC_ANDROID_START_OK",
+        "menuVisible=",
         "worldStageIndex = stage;",
-        "if (screen != GameScreen.Briefing) return;",
         "if (screen == GameScreen.Help) CloseHelp();",
     )
     if any(token not in game_flow for token in flow_tokens):
@@ -160,8 +167,12 @@ def main() -> int:
         "Difficulty.Cadet",
         "Difficulty.Shooter",
         "Difficulty.Expert",
+        "TapStartThroughAndroidFallbackForTests",
+        "TapStartThroughPointerDownForTests",
+        "TapStartThroughStandardClickForTests",
         "Is.EqualTo(GameScreen.Playing)",
-        "runtime-world-v3.1.0.png",
+        "IsMenuVisible",
+        "runtime-world-v3.2.0.png",
         "Sky has a yellow/red colour cast",
         "Terrain is oversaturated orange",
     )
@@ -172,13 +183,24 @@ def main() -> int:
 
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
-        'PlayerSettings.productName = "Ballistic Sniper 3.1"',
-        'PlayerSettings.bundleVersion = "3.1.0-unity"',
-        '"com.denis.ballisticsniper.unity.v31"',
-        '"Ballistic-Sniper-Unity-v3.1.0.apk"',
+        'PlayerSettings.productName = "Ballistic Sniper 3.2"',
+        'PlayerSettings.bundleVersion = "3.2.0-unity"',
+        '"com.denis.ballisticsniper.unity.v32"',
+        '"Ballistic-Sniper-Unity-v3.2.0.apk"',
     )
     if any(token not in configurator for token in build_tokens):
-        raise AssertionError("v3.1 clean-install Android identity is missing")
+        raise AssertionError("v3.2 clean-install Android identity is missing")
+
+    android_test = require("Tools/verify_android_start.sh").read_text(encoding="utf-8")
+    android_test_tokens = (
+        "adb install -r",
+        "adb shell input tap",
+        "BALLISTIC_ANDROID_MENU_READY version=3.2.0 screen=Menu",
+        "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
+        "android-gameplay-after-tap.png",
+    )
+    if any(token not in android_test for token in android_test_tokens):
+        raise AssertionError("installed-APK Android tap verification is missing")
 
     visual_200 = time_of_flight(200) * 1.25
     visual_900 = time_of_flight(900) * 1.25

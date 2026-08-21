@@ -5,6 +5,16 @@ using UnityEngine.UI;
 
 namespace BallisticSniper
 {
+    public sealed class ReliableTapReceiver : MonoBehaviour, IPointerDownHandler
+    {
+        public Action Pressed;
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            Pressed?.Invoke();
+        }
+    }
+
     public sealed class AimDragSurface : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
     {
         public Action<Vector2> Dragged;

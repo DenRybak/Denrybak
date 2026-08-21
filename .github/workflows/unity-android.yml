@@ -124,7 +124,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: ballistic-sniper-v31-debug-signing
+          key: ballistic-sniper-v32-debug-signing
 
       - name: Test the real menu-to-scope flow and build APK
         env:
@@ -165,7 +165,7 @@ jobs:
             -testResults "$GITHUB_WORKSPACE/TestResults/playmode-results.xml" \
             -logFile /dev/stdout
           test -s "$GITHUB_WORKSPACE/TestResults/playmode-results.xml"
-          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v3.1.0.png"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v3.2.0.png"
           "$UNITY_EDITOR" \
             -batchmode \
             -nographics \
@@ -174,13 +174,39 @@ jobs:
             -buildTarget Android \
             -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
             -logFile /dev/stdout
-          test -s Builds/Android/Ballistic-Sniper-Unity-v3.1.0.apk
+          test -s Builds/Android/Ballistic-Sniper-Unity-v3.2.0.apk
+
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the APK and verify START with a real Android tap
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 2
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: >-
+            -no-snapshot-load -no-snapshot-save -no-window
+            -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none -camera-front none
+          script: >-
+            bash Tools/verify_android_start.sh
+            Builds/Android/Ballistic-Sniper-Unity-v3.2.0.apk
+            com.denis.ballisticsniper.unity.v32
 
       - name: Upload runtime smoke-test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.1.0-smoke-test
+          name: Ballistic-Sniper-Unity-v3.2.0-smoke-test
           path: TestResults/
           if-no-files-found: warn
           retention-days: 7
@@ -188,7 +214,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.1.0-apk
-          path: Builds/Android/Ballistic-Sniper-Unity-v3.1.0.apk
+          name: Ballistic-Sniper-Unity-v3.2.0-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v3.2.0.apk
           if-no-files-found: error
           retention-days: 7
