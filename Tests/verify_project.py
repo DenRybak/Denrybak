@@ -109,18 +109,21 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v3.0.2  •  Без рекламы',
+        '"v3.0.3  •  Без рекламы',
+        "button.onClick.AddListener(binding.Invoke)",
+        "Time.unscaledTime - lastInvokedAt < 0.30f",
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
-    if "button.onClick.AddListener" in mobile_hud:
-        raise AssertionError("runtime buttons must not wait for Android pointer-up/onClick")
-
     game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
     flow_tokens = (
         "public void CloseHelp()",
-        "ConfigureStage(!reusePreparedStage)",
-        "preparedMenuStage = true",
+        "private IEnumerator PrepareCampaignStage()",
+        "ConfigureStage(false)",
+        "screen = GameScreen.Briefing;",
+        "yield return null;",
+        "hud.SetBriefingReady();",
+        "if (screen != GameScreen.Briefing || !stageReady) return;",
         "if (screen == GameScreen.Help) CloseHelp();",
     )
     if any(token not in game_flow for token in flow_tokens):
@@ -166,8 +169,8 @@ def main() -> int:
     print(f"OK: visual bullet time 200m={visual_200:.3f}s, 900m={visual_900:.3f}s")
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
-    print("OK: Android buttons dispatch on touch-down with renderer-safe RawImage backgrounds")
-    print("OK: first start and help-to-menu transitions avoid redundant 3D range rebuilds")
+    print("OK: Android buttons use debounced touch-down plus standard UI click fallback")
+    print("OK: START opens briefing immediately and prepares the selected range on the next frame")
     return 0
 
 

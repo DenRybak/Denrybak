@@ -106,6 +106,7 @@ namespace BallisticSniper
         private Text briefingNote;
         private Text briefingStats;
         private Text briefingSolution;
+        private Button briefingEnterButton;
         private Text resultHeadline;
         private Text resultPoints;
         private Text resultError;
@@ -193,6 +194,8 @@ namespace BallisticSniper
         public void ShowBriefing(int stage, StageDefinition definition, float wind, BallisticSolution solution)
         {
             SetRoots(briefing: true);
+            briefingEnterButton.interactable = false;
+            SetButtonLabel(briefingEnterButton, "ПОДГОТОВКА...");
             briefingKicker.text = "РУБЕЖ " + (stage + 1) + " / " + GameRules.Stages;
             briefingTitle.text = definition.Name;
             briefingNote.text = definition.Note;
@@ -204,6 +207,12 @@ namespace BallisticSniper
                 solution.TimeSeconds,
                 solution.ElevationMil,
                 FormatWindage((float)-solution.WindMil));
+        }
+
+        public void SetBriefingReady()
+        {
+            briefingEnterButton.interactable = true;
+            SetButtonLabel(briefingEnterButton, "НА РУБЕЖ");
         }
 
         public void ShowGameplay(HudSnapshot snapshot, bool flight)
@@ -416,7 +425,7 @@ namespace BallisticSniper
             Button start = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
             start.GetComponentInChildren<Text>().fontSize = 31;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.0.2  •  Без рекламы  •  Без интернета  •  Без регистрации";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.0.3  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()
@@ -452,8 +461,8 @@ namespace BallisticSniper
             briefingNote = CreateText(card.transform, "Note", new Vector2(0.08f, 0.59f), new Vector2(0.92f, 0.68f), 20, TextAnchor.MiddleCenter, GoldLight);
             briefingStats = CreateText(card.transform, "Stats", new Vector2(0.10f, 0.19f), new Vector2(0.31f, 0.58f), 19, TextAnchor.UpperLeft, Paper, FontStyle.Bold);
             briefingSolution = CreateText(card.transform, "Solution", new Vector2(0.34f, 0.26f), new Vector2(0.90f, 0.55f), 20, TextAnchor.MiddleLeft, GoldLight, FontStyle.Bold);
-            Button enter = CreateButton(card.transform, "Enter Range", "НА РУБЕЖ", new Vector2(0.36f, 0.06f), new Vector2(0.64f, 0.20f), game.EnterRange, true);
-            enter.GetComponentInChildren<Text>().fontSize = 28;
+            briefingEnterButton = CreateButton(card.transform, "Enter Range", "НА РУБЕЖ", new Vector2(0.36f, 0.06f), new Vector2(0.64f, 0.20f), game.EnterRange, true);
+            briefingEnterButton.GetComponentInChildren<Text>().fontSize = 28;
         }
 
         private void CreateResult()
@@ -605,6 +614,10 @@ namespace BallisticSniper
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             ReliableButtonBinding binding = new ReliableButtonBinding(button, action);
             reliableButtons.Add(binding);
+            // Keep Unity's standard pointer-up route as a second path. The
+            // direct touch-down dispatcher remains primary; the binding
+            // debounces both paths so a single tap cannot invoke twice.
+            if (action != null) button.onClick.AddListener(binding.Invoke);
             Text text = CreateText(buttonObject.transform, "Label", new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f),
                 21, TextAnchor.MiddleCenter, primary ? Ink : Paper, FontStyle.Bold);
             text.text = label;
@@ -646,6 +659,7 @@ namespace BallisticSniper
             private readonly Button button;
             private readonly Action action;
             private int lastInvokedFrame = -100;
+            private float lastInvokedAt = -100f;
 
             public ReliableButtonBinding(Button button, Action action)
             {
@@ -658,8 +672,9 @@ namespace BallisticSniper
 
             public void Invoke()
             {
-                if (!CanInvoke || lastInvokedFrame == Time.frameCount) return;
+                if (!CanInvoke || lastInvokedFrame == Time.frameCount || Time.unscaledTime - lastInvokedAt < 0.30f) return;
                 lastInvokedFrame = Time.frameCount;
+                lastInvokedAt = Time.unscaledTime;
                 action();
             }
         }

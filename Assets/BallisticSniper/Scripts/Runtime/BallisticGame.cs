@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
@@ -39,7 +40,9 @@ namespace BallisticSniper
         private int destructionStreak;
         private bool demolitionBonusAwarded;
         private bool bonusMode;
-        private bool preparedMenuStage;
+        private bool campaignStarting;
+        private bool stageReady;
+        private Coroutine prepareCampaignRoutine;
 
         private float range;
         private float baseWind;
@@ -111,7 +114,6 @@ namespace BallisticSniper
             CreateKillCam();
 
             world.BuildStage(0, difficulty);
-            preparedMenuStage = true;
             ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
         }
@@ -171,14 +173,10 @@ namespace BallisticSniper
 
         public void StartCampaign()
         {
-            if (screen != GameScreen.Menu && screen != GameScreen.Summary) return;
+            if (campaignStarting) return;
 
-            // The first range is already built behind the main menu. Reusing
-            // it makes the initial transition immediate on mobile instead of
-            // destroying and recreating the complete 3D range before the
-            // briefing can appear.
-            bool reusePreparedStage = screen == GameScreen.Menu && preparedMenuStage;
             Time.timeScale = 1f;
+            StopTransientShot();
             stage = 0;
             shotInStage = 0;
             totalShots = 0;
@@ -186,10 +184,30 @@ namespace BallisticSniper
             hitCount = 0;
             successfulShots = 0;
             destroyedCount = 0;
-            ConfigureStage(!reusePreparedStage);
-            preparedMenuStage = false;
+            stageReady = false;
+            campaignStarting = true;
+
+            // Change the visible screen before any 3D range work. On Android
+            // this makes START respond immediately and avoids a silent-looking
+            // pause while the selected difficulty is prepared.
+            ConfigureStage(false);
             screen = GameScreen.Briefing;
             ShowBriefing();
+
+            if (prepareCampaignRoutine != null) StopCoroutine(prepareCampaignRoutine);
+            prepareCampaignRoutine = StartCoroutine(PrepareCampaignStage());
+        }
+
+        private IEnumerator PrepareCampaignStage()
+        {
+            // Let Unity render the briefing once before rebuilding the range.
+            yield return null;
+            world.BuildStage(stage, difficulty);
+            ResetCameraForBriefing();
+            stageReady = true;
+            campaignStarting = false;
+            prepareCampaignRoutine = null;
+            hud.SetBriefingReady();
         }
 
         public void RestartCampaign() => StartCampaign();
@@ -218,20 +236,24 @@ namespace BallisticSniper
             }
 
             Time.timeScale = 1f;
+            if (prepareCampaignRoutine != null)
+            {
+                StopCoroutine(prepareCampaignRoutine);
+                prepareCampaignRoutine = null;
+            }
+            campaignStarting = false;
+            stageReady = false;
             StopTransientShot();
             screen = GameScreen.Menu;
             holdingBreath = false;
             stage = 0;
-            // Menu navigation must be immediate. The first range is rebuilt
-            // only when a new campaign actually starts.
-            preparedMenuStage = false;
             ResetCameraForMenu();
             hud.ShowMenu(highScore, difficulty);
         }
 
         public void EnterRange()
         {
-            if (screen != GameScreen.Briefing) return;
+            if (screen != GameScreen.Briefing || !stageReady) return;
             screen = GameScreen.Playing;
             ResetAim();
             UpdateWind();
