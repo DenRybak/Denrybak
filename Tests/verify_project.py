@@ -128,6 +128,8 @@ def main() -> int:
         "ResultActionOverlapsFireForTests",
         "aimSurface.transform.SetParent(fullScreenRoot, false)",
         "scopeLayer.transform.SetParent(fullScreenRoot, false)",
+        "TryInvokeSafeZone(elevationPlusBinding",
+        "TryInvokeSafeZone(resultActionBinding",
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
@@ -239,6 +241,7 @@ def main() -> int:
         "BALLISTIC_ANDROID_RESULT_READY",
         "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
         "BALLISTIC_ANDROID_AIM_READY",
+        "BALLISTIC_ANDROID_ELEVATION value=1.0",
         "android-impact-closeup.png",
         "android-aim-after-return.png",
         "android-gameplay-after-tap.png",

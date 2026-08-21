@@ -266,6 +266,8 @@ namespace BallisticSniper
         {
             if (screen != GameScreen.Playing) return;
             elevationDialMil = Mathf.Clamp(elevationDialMil + deltaMil, 0f, 15f);
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_ELEVATION value={0:0.0}", elevationDialMil));
             RefreshGameplayHud(true);
         }
 

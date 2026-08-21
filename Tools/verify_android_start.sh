@@ -104,6 +104,8 @@ adb shell input tap "$elevation_x" "$elevation_plus_y"
 sleep 0.38
 adb shell input tap "$elevation_x" "$elevation_plus_y"
 sleep 0.38
+adb logcat -d > "$RESULTS_DIR/android-controls-logcat.txt"
+grep -Fq "BALLISTIC_ANDROID_ELEVATION value=1.0" "$RESULTS_DIR/android-controls-logcat.txt"
 
 fire_x=$((screen_width * 885 / 1000))
 fire_y=$((screen_height * 872 / 1000))

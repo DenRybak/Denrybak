@@ -104,6 +104,14 @@ namespace BallisticSniper
         private ReliableButtonBinding startBinding;
         private Button fireButton;
         private Text fireButtonText;
+        private ReliableButtonBinding elevationMinusBinding;
+        private ReliableButtonBinding elevationPlusBinding;
+        private ReliableButtonBinding zoomMinusBinding;
+        private ReliableButtonBinding zoomPlusBinding;
+        private ReliableButtonBinding windageLeftBinding;
+        private ReliableButtonBinding windageRightBinding;
+        private ReliableButtonBinding fireBinding;
+        private ReliableButtonBinding resultActionBinding;
         private Text briefingKicker;
         private Text briefingTitle;
         private Text briefingNote;
@@ -379,20 +387,26 @@ namespace BallisticSniper
             elevationText = CreateText(gameplayRoot.transform, "Elevation Value", new Vector2(0.035f, 0.57f), new Vector2(0.13f, 0.646f), 31, TextAnchor.MiddleCenter, Paper, FontStyle.Bold);
             elevationCalcText = CreateText(gameplayRoot.transform, "Elevation Calculation", new Vector2(0.035f, 0.525f), new Vector2(0.13f, 0.575f), 15, TextAnchor.MiddleCenter, Mint);
             CreateButton(gameplayRoot.transform, "Elevation Minus", "− 0.5", new Vector2(0.039f, 0.425f), new Vector2(0.126f, 0.515f), () => game.AdjustElevation(-0.5f), false);
+            elevationMinusBinding = reliableButtons[reliableButtons.Count - 1];
             CreateButton(gameplayRoot.transform, "Elevation Plus", "+ 0.5", new Vector2(0.039f, 0.335f), new Vector2(0.126f, 0.415f), () => game.AdjustElevation(0.5f), true);
+            elevationPlusBinding = reliableButtons[reliableButtons.Count - 1];
 
             CreatePanel(gameplayRoot.transform, "Zoom Panel", new Vector2(0.145f, 0.34f), new Vector2(0.235f, 0.70f), Panel);
             CreateText(gameplayRoot.transform, "Zoom Heading", new Vector2(0.155f, 0.645f), new Vector2(0.225f, 0.688f), 18, TextAnchor.MiddleCenter, Gold, FontStyle.Bold).text = "ZOOM";
             zoomText = CreateText(gameplayRoot.transform, "Zoom Value", new Vector2(0.155f, 0.56f), new Vector2(0.225f, 0.645f), 32, TextAnchor.MiddleCenter, Paper, FontStyle.Bold);
             CreateButton(gameplayRoot.transform, "Zoom Minus", "−", new Vector2(0.158f, 0.445f), new Vector2(0.222f, 0.535f), () => game.AdjustZoom(-1), false);
+            zoomMinusBinding = reliableButtons[reliableButtons.Count - 1];
             CreateButton(gameplayRoot.transform, "Zoom Plus", "+", new Vector2(0.158f, 0.345f), new Vector2(0.222f, 0.435f), () => game.AdjustZoom(1), true);
+            zoomPlusBinding = reliableButtons[reliableButtons.Count - 1];
 
             CreatePanel(gameplayRoot.transform, "Windage Panel", new Vector2(0.86f, 0.34f), new Vector2(0.975f, 0.70f), Panel);
             CreateText(gameplayRoot.transform, "Windage Heading", new Vector2(0.87f, 0.645f), new Vector2(0.965f, 0.688f), 18, TextAnchor.MiddleCenter, Gold, FontStyle.Bold).text = "WIND • MIL";
             windageText = CreateText(gameplayRoot.transform, "Windage Value", new Vector2(0.87f, 0.57f), new Vector2(0.965f, 0.646f), 27, TextAnchor.MiddleCenter, Paper, FontStyle.Bold);
             windageCalcText = CreateText(gameplayRoot.transform, "Windage Calculation", new Vector2(0.87f, 0.525f), new Vector2(0.965f, 0.575f), 14, TextAnchor.MiddleCenter, Mint);
             CreateButton(gameplayRoot.transform, "Windage Left", "L 0.5", new Vector2(0.874f, 0.425f), new Vector2(0.961f, 0.515f), () => game.AdjustWindage(-0.5f), false);
+            windageLeftBinding = reliableButtons[reliableButtons.Count - 1];
             CreateButton(gameplayRoot.transform, "Windage Right", "R 0.5", new Vector2(0.874f, 0.335f), new Vector2(0.961f, 0.415f), () => game.AdjustWindage(0.5f), true);
+            windageRightBinding = reliableButtons[reliableButtons.Count - 1];
 
             Button menu = CreateButton(gameplayRoot.transform, "Pause", "Ⅱ", new Vector2(0.025f, 0.735f), new Vector2(0.075f, 0.82f), game.TogglePause, false);
             menu.GetComponentInChildren<Text>().fontSize = 28;
@@ -408,6 +422,7 @@ namespace BallisticSniper
             breathFillRect = breathFillObject.GetComponent<RectTransform>();
 
             fireButton = CreateButton(gameplayRoot.transform, "Fire", "ОГОНЬ", new Vector2(0.805f, 0.045f), new Vector2(0.965f, 0.21f), game.Fire, true);
+            fireBinding = reliableButtons[reliableButtons.Count - 1];
             fireButtonText = fireButton.GetComponentInChildren<Text>();
             fireButtonText.fontSize = 31;
 
@@ -489,6 +504,7 @@ namespace BallisticSniper
             resultTarget = CreateText(card.transform, "Target", new Vector2(0.09f, 0.20f), new Vector2(0.91f, 0.32f), 15, TextAnchor.MiddleCenter, Paper);
             resultZoom = CreateText(card.transform, "Review Zoom", new Vector2(0.09f, 0.12f), new Vector2(0.91f, 0.20f), 15, TextAnchor.MiddleCenter, Gold);
             resultAction = CreateButton(resultRoot.transform, "Continue", "К ЦЕЛЯМ", new Vector2(0.39f, 0.055f), new Vector2(0.61f, 0.175f), game.ContinueAfterResult, true);
+            resultActionBinding = reliableButtons[reliableButtons.Count - 1];
         }
 
         private void CreateSummary()
@@ -670,6 +686,22 @@ namespace BallisticSniper
                 return;
             }
 
+            if (game.CurrentScreen == GameScreen.Playing)
+            {
+                if (TryInvokeSafeZone(elevationMinusBinding, screenPosition, 0.030f, 0.420f, 0.135f, 0.525f)) return;
+                if (TryInvokeSafeZone(elevationPlusBinding, screenPosition, 0.030f, 0.325f, 0.135f, 0.425f)) return;
+                if (TryInvokeSafeZone(zoomMinusBinding, screenPosition, 0.148f, 0.435f, 0.232f, 0.545f)) return;
+                if (TryInvokeSafeZone(zoomPlusBinding, screenPosition, 0.148f, 0.335f, 0.232f, 0.445f)) return;
+                if (TryInvokeSafeZone(windageLeftBinding, screenPosition, 0.865f, 0.420f, 0.970f, 0.525f)) return;
+                if (TryInvokeSafeZone(windageRightBinding, screenPosition, 0.865f, 0.325f, 0.970f, 0.425f)) return;
+                if (TryInvokeSafeZone(fireBinding, screenPosition, 0.795f, 0.035f, 0.975f, 0.220f)) return;
+            }
+            else if (game.CurrentScreen == GameScreen.Result &&
+                     TryInvokeSafeZone(resultActionBinding, screenPosition, 0.38f, 0.045f, 0.62f, 0.185f))
+            {
+                return;
+            }
+
             for (int i = reliableButtons.Count - 1; i >= 0; i--)
             {
                 ReliableButtonBinding binding = reliableButtons[i];
@@ -691,6 +723,27 @@ namespace BallisticSniper
             float normalizedY = (screenPosition.y - safe.yMin) / safe.height;
             return normalizedX >= 0.69f && normalizedX <= 0.96f &&
                    normalizedY >= 0.48f && normalizedY <= 0.69f;
+        }
+
+        private static bool TryInvokeSafeZone(
+            ReliableButtonBinding binding,
+            Vector2 screenPosition,
+            float minX,
+            float minY,
+            float maxX,
+            float maxY)
+        {
+            if (binding == null || !binding.CanInvoke) return false;
+            Rect safe = Screen.safeArea;
+            if (safe.width <= 1f || safe.height <= 1f)
+            {
+                safe = new Rect(0f, 0f, Mathf.Max(1f, Screen.width), Mathf.Max(1f, Screen.height));
+            }
+            float normalizedX = (screenPosition.x - safe.xMin) / safe.width;
+            float normalizedY = (screenPosition.y - safe.yMin) / safe.height;
+            if (normalizedX < minX || normalizedX > maxX || normalizedY < minY || normalizedY > maxY) return false;
+            binding.Invoke();
+            return true;
         }
 
         public void TapStartThroughAndroidFallbackForTests()
