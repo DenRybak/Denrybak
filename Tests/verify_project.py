@@ -225,6 +225,8 @@ def main() -> int:
         "android-app-logcat.txt",
         "android-startup-app-logcat.txt",
         "Can't add component because class",
+        'pidof "$PACKAGE_NAME" 2>/dev/null',
+        "|| true",
     )
     if any(token not in android_test for token in android_test_tokens):
         raise AssertionError("installed-APK Android tap verification is missing")

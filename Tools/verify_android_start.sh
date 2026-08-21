@@ -25,7 +25,9 @@ adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 \
 
 app_pid=""
 for _ in $(seq 1 30); do
-  app_pid="$(adb shell pidof "$PACKAGE_NAME" | tr -d '\r')"
+  # pidof exits with status 1 during the short Activity-start race. Keep the
+  # retry loop alive under set -e until Android publishes the process.
+  app_pid="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
   if [ -n "$app_pid" ]; then
     break
   fi
