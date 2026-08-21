@@ -57,9 +57,16 @@ namespace BallisticSniper
         private static readonly Color Mint = new Color32(123, 205, 178, 255);
         private static readonly Color Red = new Color32(218, 76, 63, 255);
         private static readonly Color Panel = new Color32(13, 28, 25, 226);
+        private static readonly string[] DifficultyLabels =
+        {
+            "КАДЕТ\nПодсказка",
+            "СТРЕЛОК\nСнос + качка",
+            "ЭКСПЕРТ\nПорывы ветра"
+        };
 
         private BallisticGame game;
         private Font font;
+        private Texture2D uiTexture;
         private Canvas canvas;
         private RectTransform safeRoot;
         private GameObject aimSurface;
@@ -91,7 +98,7 @@ namespace BallisticSniper
         private Text breathText;
         private Text reticleInfoText;
         private Text modeText;
-        private Image breathFill;
+        private RectTransform breathFillRect;
         private Button fireButton;
         private Text fireButtonText;
         private Text briefingKicker;
@@ -111,13 +118,10 @@ namespace BallisticSniper
         private Text summaryStats;
         private Text cinematicLabel;
 
-        // uGUI's normal Button.onClick path is retained, but every runtime
-        // button is also hit-tested directly against Android touches.  This
-        // makes the menus usable even on devices where the legacy input
-        // module occasionally drops a pointer-up event after a safe-area or
-        // orientation change.
+        // Runtime buttons are dispatched directly on pointer-down. Waiting
+        // for uGUI's pointer-up/click sequence proved unreliable on several
+        // Android devices after a landscape/safe-area change.
         private readonly List<ReliableButtonBinding> reliableButtons = new List<ReliableButtonBinding>();
-        private readonly Dictionary<int, ReliableButtonBinding> pressedPointers = new Dictionary<int, ReliableButtonBinding>();
 
         public float ScopeRadius
         {
@@ -134,6 +138,7 @@ namespace BallisticSniper
         {
             game = owner;
             LoadFont();
+            CreateUiTexture();
             CreateCanvas();
             CreateScopeLayer();
             CreateGameplay();
@@ -163,13 +168,20 @@ namespace BallisticSniper
             highScoreText.text = "РЕКОРД  " + highScore;
             for (int i = 0; i < difficultyButtons.Length; i++)
             {
-                Image image = difficultyButtons[i].GetComponent<Image>();
-                Color normal = i == (int)difficulty ? new Color32(44, 64, 56, 245) : new Color32(23, 37, 34, 225);
-                image.color = Color.white;
+                bool selected = i == (int)difficulty;
+                Graphic graphic = difficultyButtons[i].targetGraphic;
+                Color normal = selected ? new Color32(232, 180, 75, 255) : new Color32(23, 37, 34, 245);
+                graphic.color = Color.white;
                 ColorBlock colors = difficultyButtons[i].colors;
                 colors.normalColor = normal;
-                colors.highlightedColor = i == (int)difficulty ? new Color32(58, 79, 69, 255) : new Color32(34, 52, 47, 255);
+                colors.highlightedColor = selected ? new Color32(250, 220, 142, 255) : new Color32(44, 73, 64, 255);
+                colors.pressedColor = selected ? new Color32(201, 143, 45, 255) : new Color32(13, 30, 26, 255);
                 difficultyButtons[i].colors = colors;
+                graphic.CrossFadeColor(normal, 0f, true, true);
+
+                Text label = difficultyButtons[i].GetComponentInChildren<Text>();
+                label.text = (selected ? "✓ " : string.Empty) + DifficultyLabels[i];
+                label.color = selected ? Ink : Paper;
             }
         }
 
@@ -225,7 +237,9 @@ namespace BallisticSniper
             windageCalcText.text = "РАСЧЁТ  " + FormatWindage((float)-snapshot.Solution.WindMil);
             zoomText.text = "×" + snapshot.Zoom;
             breathText.text = snapshot.HoldingBreath ? "ДЕРЖУ • ВЕДИ" : "ДЫХАНИЕ";
-            breathFill.fillAmount = Mathf.Clamp01(snapshot.Breath);
+            Vector2 fillMax = breathFillRect.anchorMax;
+            fillMax.x = Mathf.Clamp01(snapshot.Breath);
+            breathFillRect.anchorMax = fillMax;
             reticleInfoText.text = "FFP  ×" + snapshot.Zoom + "   •   1 MIL";
             modeText.text = snapshot.Difficulty == Difficulty.Cadet ? "КАДЕТ • БЕЗ КАЧКИ" :
                 snapshot.Difficulty == Difficulty.Shooter ? "СТРЕЛОК • СНОС + КАЧКА" : "ЭКСПЕРТ • ПОРЫВЫ";
@@ -363,19 +377,14 @@ namespace BallisticSniper
             menu.GetComponentInChildren<Text>().fontSize = 28;
 
             GameObject breath = CreatePanel(gameplayRoot.transform, "Breath Hold + Aim", new Vector2(0.035f, 0.055f), new Vector2(0.19f, 0.19f), new Color32(19, 45, 39, 238));
-            breath.GetComponent<Image>().raycastTarget = true;
+            breath.GetComponent<RawImage>().raycastTarget = true;
             HoldDragButton hold = breath.AddComponent<HoldDragButton>();
             hold.HoldChanged = game.SetBreath;
             hold.Dragged = game.DragAim;
             breathText = CreateText(breath.transform, "Breath Label", new Vector2(0.08f, 0.43f), new Vector2(0.92f, 0.90f), 22, TextAnchor.MiddleCenter, Paper, FontStyle.Bold);
             GameObject breathBack = CreatePanel(breath.transform, "Stamina Back", new Vector2(0.11f, 0.15f), new Vector2(0.89f, 0.31f), new Color32(3, 10, 8, 220));
             GameObject breathFillObject = CreatePanel(breathBack.transform, "Stamina Fill", Vector2.zero, Vector2.one, Mint);
-            breathFill = breathFillObject.GetComponent<Image>();
-            breathFill.color = Mint;
-            breathFill.type = Image.Type.Filled;
-            breathFill.fillMethod = Image.FillMethod.Horizontal;
-            breathFill.fillOrigin = 0;
-            breathFill.fillAmount = 1f;
+            breathFillRect = breathFillObject.GetComponent<RectTransform>();
 
             fireButton = CreateButton(gameplayRoot.transform, "Fire", "ОГОНЬ", new Vector2(0.805f, 0.045f), new Vector2(0.965f, 0.21f), game.Fire, true);
             fireButtonText = fireButton.GetComponentInChildren<Text>();
@@ -394,12 +403,11 @@ namespace BallisticSniper
             CreateText(menuRoot.transform, "Claim", new Vector2(0.078f, 0.46f), new Vector2(0.62f, 0.535f), 22, TextAnchor.MiddleLeft, Paper).text = "Пять целей одновременно. Оптика ×4–×16. Реальная поправка.";
             CreateText(menuRoot.transform, "Specs", new Vector2(0.078f, 0.36f), new Vector2(0.62f, 0.46f), 20, TextAnchor.MiddleLeft, GoldLight).text = "КАЛИБР  .308 WIN       НАЧ. СКОРОСТЬ  820 м/с       ОПТИКА  FFP ×4–×16";
 
-            string[] names = { "КАДЕТ\nПодсказка", "СТРЕЛОК\nСнос + качка", "ЭКСПЕРТ\nПорывы ветра" };
             for (int i = 0; i < 3; i++)
             {
                 int captured = i;
                 float left = 0.078f + i * 0.158f;
-                difficultyButtons[i] = CreateButton(menuRoot.transform, "Difficulty " + i, names[i],
+                difficultyButtons[i] = CreateButton(menuRoot.transform, "Difficulty " + i, DifficultyLabels[i],
                     new Vector2(left, 0.16f), new Vector2(left + 0.145f, 0.33f), () => game.SetDifficulty((Difficulty)captured), i == 1);
             }
             CreateText(menuRoot.transform, "Mode Label", new Vector2(0.078f, 0.32f), new Vector2(0.30f, 0.365f), 17, TextAnchor.MiddleLeft, Paper).text = "РЕЖИМ";
@@ -408,7 +416,7 @@ namespace BallisticSniper
             Button start = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
             start.GetComponentInChildren<Text>().fontSize = 31;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.60f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "Без рекламы  •  Без интернета  •  Без регистрации";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.0.2  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()
@@ -432,7 +440,7 @@ namespace BallisticSniper
                 CreateText(card.transform, "Body", new Vector2(0.08f, 0.10f), new Vector2(0.92f, 0.69f), 17, TextAnchor.UpperLeft, Paper).text = bodies[i];
             }
             CreateText(helpRoot.transform, "MIL note", new Vector2(0.09f, 0.13f), new Vector2(0.78f, 0.23f), 19, TextAnchor.MiddleLeft, GoldLight).text = "1 крупное деление = 1 MIL при любой кратности. Бочка рядом с объектом экономит патрон и открывает бонусные выстрелы.";
-            CreateButton(helpRoot.transform, "Back", "НАЗАД", new Vector2(0.80f, 0.10f), new Vector2(0.92f, 0.22f), game.OpenMenu, false);
+            CreateButton(helpRoot.transform, "Back", "НАЗАД", new Vector2(0.80f, 0.10f), new Vector2(0.92f, 0.22f), game.CloseHelp, false);
         }
 
         private void CreateBriefing()
@@ -520,10 +528,9 @@ namespace BallisticSniper
             Stretch(root.GetComponent<RectTransform>());
             if (background.HasValue)
             {
-                Image image = root.AddComponent<Image>();
+                RawImage image = root.AddComponent<RawImage>();
+                image.texture = uiTexture;
                 image.color = background.Value;
-                // A full-screen decorative image must never win a raycast over
-                // a child button.  The direct touch fallback also ignores it.
                 image.raycastTarget = false;
             }
             return root;
@@ -531,16 +538,11 @@ namespace BallisticSniper
 
         private GameObject CreatePanel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Color color)
         {
-            GameObject panel = new GameObject(name, typeof(RectTransform), typeof(Image));
+            GameObject panel = new GameObject(name, typeof(RectTransform), typeof(RawImage));
             panel.transform.SetParent(parent, false);
             SetAnchors(panel.GetComponent<RectTransform>(), anchorMin, anchorMax);
-            Image image = panel.GetComponent<Image>();
-            // A sprite generated at runtime was not rendered by several
-            // Android GPU/driver combinations, leaving invisible hit areas.
-            // A sprite-less Simple Image uses Unity's built-in white texture
-            // and is deterministic on every renderer.
-            image.sprite = null;
-            image.type = Image.Type.Simple;
+            RawImage image = panel.GetComponent<RawImage>();
+            image.texture = uiTexture;
             image.color = color;
             image.raycastTarget = false;
             return panel;
@@ -583,12 +585,11 @@ namespace BallisticSniper
             Action action,
             bool primary)
         {
-            GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(RawImage), typeof(Button));
             buttonObject.transform.SetParent(parent, false);
             SetAnchors(buttonObject.GetComponent<RectTransform>(), anchorMin, anchorMax);
-            Image image = buttonObject.GetComponent<Image>();
-            image.sprite = null;
-            image.type = Image.Type.Simple;
+            RawImage image = buttonObject.GetComponent<RawImage>();
+            image.texture = uiTexture;
             image.color = Color.white;
             image.raycastTarget = true;
             Color normal = primary ? new Color32(201, 143, 45, 248) : new Color32(26, 49, 43, 244);
@@ -604,7 +605,6 @@ namespace BallisticSniper
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             ReliableButtonBinding binding = new ReliableButtonBinding(button, action);
             reliableButtons.Add(binding);
-            if (action != null) button.onClick.AddListener(binding.Invoke);
             Text text = CreateText(buttonObject.transform, "Label", new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f),
                 21, TextAnchor.MiddleCenter, primary ? Ink : Paper, FontStyle.Bold);
             text.text = label;
@@ -620,46 +620,25 @@ namespace BallisticSniper
                     Touch touch = Input.GetTouch(i);
                     if (touch.phase == TouchPhase.Began)
                     {
-                        BeginReliablePress(touch.fingerId, touch.position);
-                    }
-                    else if (touch.phase == TouchPhase.Ended)
-                    {
-                        EndReliablePress(touch.fingerId, touch.position);
-                    }
-                    else if (touch.phase == TouchPhase.Canceled)
-                    {
-                        pressedPointers.Remove(touch.fingerId);
+                        InvokeButtonAt(touch.position);
                     }
                 }
                 return;
             }
 
-            const int mousePointer = -1000;
-            if (Input.GetMouseButtonDown(0)) BeginReliablePress(mousePointer, Input.mousePosition);
-            if (Input.GetMouseButtonUp(0)) EndReliablePress(mousePointer, Input.mousePosition);
+            if (Input.GetMouseButtonDown(0)) InvokeButtonAt(Input.mousePosition);
         }
 
-        private void BeginReliablePress(int pointerId, Vector2 screenPosition)
+        private void InvokeButtonAt(Vector2 screenPosition)
         {
-            pressedPointers.Remove(pointerId);
             for (int i = reliableButtons.Count - 1; i >= 0; i--)
             {
                 ReliableButtonBinding binding = reliableButtons[i];
                 if (!binding.CanInvoke) continue;
                 if (!RectTransformUtility.RectangleContainsScreenPoint(binding.Rect, screenPosition, null)) continue;
-                pressedPointers[pointerId] = binding;
+                binding.Invoke();
                 return;
             }
-        }
-
-        private void EndReliablePress(int pointerId, Vector2 screenPosition)
-        {
-            ReliableButtonBinding binding;
-            if (!pressedPointers.TryGetValue(pointerId, out binding)) return;
-            pressedPointers.Remove(pointerId);
-            if (!binding.CanInvoke) return;
-            if (!RectTransformUtility.RectangleContainsScreenPoint(binding.Rect, screenPosition, null)) return;
-            binding.Invoke();
         }
 
         private sealed class ReliableButtonBinding
@@ -675,7 +654,7 @@ namespace BallisticSniper
             }
 
             public RectTransform Rect => (RectTransform)button.transform;
-            public bool CanInvoke => action != null && button != null && button.isActiveAndEnabled && button.interactable;
+            public bool CanInvoke => action != null && button != null && button.gameObject.activeInHierarchy && button.isActiveAndEnabled && button.interactable;
 
             public void Invoke()
             {
@@ -706,6 +685,19 @@ namespace BallisticSniper
                 try { font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
                 catch (ArgumentException) { font = null; }
             }
+        }
+
+        private void CreateUiTexture()
+        {
+            uiTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false, true)
+            {
+                name = "Runtime UI White Pixel",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Point,
+                hideFlags = HideFlags.DontSave
+            };
+            uiTexture.SetPixels(new[] { Color.white, Color.white, Color.white, Color.white });
+            uiTexture.Apply(false, true);
         }
 
         private static void Stretch(RectTransform rect)
