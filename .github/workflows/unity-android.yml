@@ -3,7 +3,7 @@ name: Build Unity Android APK
 "on":
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, codex/unity-v3-0-2-menu-fix]
 
 permissions:
   contents: read
