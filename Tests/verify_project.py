@@ -103,13 +103,28 @@ def main() -> int:
     mobile_hud = require("Assets/BallisticSniper/Scripts/UI/MobileHud.cs").read_text(encoding="utf-8")
     reliable_ui_tokens = (
         "DispatchReliableTouches",
+        "InvokeButtonAt(touch.position)",
         "RectTransformUtility.RectangleContainsScreenPoint",
         "button.targetGraphic = image",
         "image.raycastTarget = false",
-        "image.sprite = null",
+        "image.texture = uiTexture",
+        'label.text = (selected ? "✓ " : string.Empty)',
+        '"v3.0.2  •  Без рекламы',
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
+    if "button.onClick.AddListener" in mobile_hud:
+        raise AssertionError("runtime buttons must not wait for Android pointer-up/onClick")
+
+    game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
+    flow_tokens = (
+        "public void CloseHelp()",
+        "ConfigureStage(!reusePreparedStage)",
+        "preparedMenuStage = true",
+        "if (screen == GameScreen.Help) CloseHelp();",
+    )
+    if any(token not in game_flow for token in flow_tokens):
+        raise AssertionError("instant start/help navigation flow is missing")
 
     visual_200 = time_of_flight(200) * 1.25
     visual_900 = time_of_flight(900) * 1.25
@@ -151,7 +166,8 @@ def main() -> int:
     print(f"OK: visual bullet time 200m={visual_200:.3f}s, 900m={visual_900:.3f}s")
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
-    print("OK: Android buttons have direct touch fallback and renderer-safe backgrounds")
+    print("OK: Android buttons dispatch on touch-down with renderer-safe RawImage backgrounds")
+    print("OK: first start and help-to-menu transitions avoid redundant 3D range rebuilds")
     return 0
 
 
