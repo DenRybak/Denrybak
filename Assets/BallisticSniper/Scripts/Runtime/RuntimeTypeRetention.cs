@@ -18,6 +18,7 @@ namespace BallisticSniper
             typeof(CapsuleCollider),
             typeof(MeshCollider),
             typeof(Rigidbody),
+            typeof(CharacterJoint),
             typeof(MeshFilter),
             typeof(MeshRenderer),
             typeof(LineRenderer),

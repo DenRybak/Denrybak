@@ -18,6 +18,7 @@ namespace BallisticSniper.Tests
             MobileHud hud = Object.FindObjectOfType<MobileHud>();
             Assert.That(hud, Is.Not.Null, "Runtime HUD was not created");
             Assert.That(hud.StartButtonForTests, Is.Not.Null, "START button is missing");
+            game.SetCampaignMode(CampaignMode.Range);
 
             Difficulty[] difficulties =
             {
@@ -57,12 +58,73 @@ namespace BallisticSniper.Tests
 
                 if (difficulties[index] == Difficulty.Shooter)
                 {
-                    yield return CaptureAndValidateWorldFrame();
+                    yield return CaptureAndValidateWorldFrame("runtime-world-v4.0.0.png");
                 }
 
                 game.OpenMenu();
                 yield return new WaitForSecondsRealtime(0.36f);
             }
+        }
+
+        [UnityTest]
+        public IEnumerator OperationsBuildCharactersAndReleaseARealJointedRagdoll()
+        {
+            yield return null;
+
+            BallisticGame game = Object.FindObjectOfType<BallisticGame>();
+            MobileHud hud = Object.FindObjectOfType<MobileHud>();
+            Assert.That(game, Is.Not.Null);
+            Assert.That(hud, Is.Not.Null);
+
+            if (game.CurrentScreen != GameScreen.Menu)
+            {
+                game.OpenMenu();
+                yield return new WaitForSecondsRealtime(0.36f);
+            }
+
+            WeaponDefinition before = game.SelectedWeaponForTests;
+            game.CycleWeapon();
+            Assert.That(game.SelectedWeaponForTests.Kind, Is.Not.EqualTo(before.Kind));
+            game.SetCampaignMode(CampaignMode.Operations);
+            game.SetDifficulty(Difficulty.Cadet);
+            hud.TapStartThroughAndroidFallbackForTests();
+            yield return null;
+
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing));
+            Assert.That(game.CampaignModeForTests, Is.EqualTo(CampaignMode.Operations));
+            RangeWorld world = Object.FindObjectOfType<RangeWorld>();
+            Assert.That(world, Is.Not.Null);
+            Assert.That(world.Targets.Count, Is.EqualTo(0));
+            Assert.That(world.Humans.Count, Is.GreaterThanOrEqualTo(3));
+            Assert.That(world.PrimaryHuman, Is.Not.Null);
+            Assert.That(world.PrimaryHuman.Bodies.Count, Is.GreaterThanOrEqualTo(10));
+            foreach (Rigidbody body in world.PrimaryHuman.Bodies)
+                Assert.That(body.isKinematic, Is.True, "Observation pose is not stable before impact");
+
+            yield return CaptureAndValidateWorldFrame("runtime-operation-v4.0.0.png");
+
+            HumanMissionActor target = world.PrimaryHuman;
+            Vector3 initialCentre = target.AimCentre;
+            world.ApplyHumanImpact(target, initialCentre, Vector3.forward, GameRules.Weapons[2].RagdollImpulse);
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+
+            Assert.That(target.IsRagdolled, Is.True);
+            bool releasedBody = false;
+            bool hasJoint = false;
+            foreach (Rigidbody body in target.Bodies)
+            {
+                releasedBody |= !body.isKinematic;
+                hasJoint |= body.GetComponent<CharacterJoint>() != null;
+            }
+            Assert.That(releasedBody, Is.True, "Impact did not release the rigidbodies");
+            Assert.That(hasJoint, Is.True, "Character is not connected by physics joints");
+
+            game.OpenMenu();
+            yield return new WaitForSecondsRealtime(0.36f);
+            game.SetCampaignMode(CampaignMode.Range);
+            for (int i = 0; i < GameRules.Weapons.Length && game.SelectedWeaponForTests.Kind != WeaponKind.Ranger308; i++)
+                game.CycleWeapon();
         }
 
         [UnityTest]
@@ -83,6 +145,9 @@ namespace BallisticSniper.Tests
                 yield return new WaitForSecondsRealtime(0.36f);
             }
 
+            game.SetCampaignMode(CampaignMode.Range);
+            for (int i = 0; i < GameRules.Weapons.Length && game.SelectedWeaponForTests.Kind != WeaponKind.Ranger308; i++)
+                game.CycleWeapon();
             game.SetDifficulty(Difficulty.Cadet);
             hud.TapStartThroughAndroidFallbackForTests();
             yield return null;
@@ -139,7 +204,7 @@ namespace BallisticSniper.Tests
             yield return new WaitForSecondsRealtime(0.36f);
         }
 
-        private static IEnumerator CaptureAndValidateWorldFrame()
+        private static IEnumerator CaptureAndValidateWorldFrame(string fileName)
         {
             // WaitForEndOfFrame is never resumed by the Unity Editor in
             // command-line batch mode. One regular frame is enough because
@@ -214,7 +279,7 @@ namespace BallisticSniper.Tests
 
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../TestResults"));
             Directory.CreateDirectory(outputDirectory);
-            File.WriteAllBytes(Path.Combine(outputDirectory, "runtime-world-v3.3.0.png"), capture.EncodeToPNG());
+            File.WriteAllBytes(Path.Combine(outputDirectory, fileName), capture.EncodeToPNG());
 
             camera.targetTexture = previousTarget;
             RenderTexture.active = previousActive;

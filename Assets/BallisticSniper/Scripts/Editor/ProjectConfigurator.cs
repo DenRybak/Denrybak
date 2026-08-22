@@ -12,6 +12,7 @@ namespace BallisticSniper.Editor
     {
         private const string ScenePath = "Assets/BallisticSniper/Scenes/BallisticSniper.unity";
         private const string AtlasPath = "Assets/BallisticSniper/Resources/BallisticSniper/Textures/range_material_atlas.png";
+        private const string PanoramaPath = "Assets/BallisticSniper/Resources/BallisticSniper/Textures/range_panorama_v4.png";
 
         static ProjectConfigurator()
         {
@@ -22,8 +23,8 @@ namespace BallisticSniper.Editor
         public static void Configure()
         {
             PlayerSettings.companyName = "Denis Games";
-            PlayerSettings.productName = "Ballistic Sniper 3.3";
-            PlayerSettings.bundleVersion = "3.3.0-unity";
+            PlayerSettings.productName = "Ballistic Sniper 4.0";
+            PlayerSettings.bundleVersion = "4.0.0-unity";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
             PlayerSettings.allowedAutorotateToPortrait = false;
             PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
@@ -33,7 +34,7 @@ namespace BallisticSniper.Editor
             PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.unity");
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
-            PlayerSettings.Android.bundleVersionCode = 9;
+            PlayerSettings.Android.bundleVersionCode = 10;
             PlayerSettings.Android.targetArchitectures =
                 AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7 | AndroidArchitecture.X86_64;
             PlayerSettings.Android.forceInternetPermission = false;
@@ -47,6 +48,25 @@ namespace BallisticSniper.Editor
             EditorUserBuildSettings.androidBuildSystem = AndroidBuildSystem.Gradle;
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             ConfigureAtlasImport();
+            ConfigurePanoramaImport();
+        }
+
+        private static void ConfigurePanoramaImport()
+        {
+            TextureImporter importer = AssetImporter.GetAtPath(PanoramaPath) as TextureImporter;
+            if (importer == null) return;
+            importer.textureType = TextureImporterType.Default;
+            importer.textureShape = TextureImporterShape.Texture2D;
+            importer.sRGBTexture = true;
+            importer.alphaSource = TextureImporterAlphaSource.None;
+            importer.wrapModeU = TextureWrapMode.Repeat;
+            importer.wrapModeV = TextureWrapMode.Clamp;
+            importer.filterMode = FilterMode.Trilinear;
+            importer.anisoLevel = 4;
+            importer.mipmapEnabled = true;
+            importer.textureCompression = TextureImporterCompression.CompressedHQ;
+            importer.maxTextureSize = 2048;
+            importer.SaveAndReimport();
         }
 
         private static void ConfigureAtlasImport()
@@ -85,7 +105,7 @@ namespace BallisticSniper.Editor
             }
             string outputDirectory = Path.GetFullPath(Path.Combine(Application.dataPath, "../Builds/Android"));
             Directory.CreateDirectory(outputDirectory);
-            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v3.3.0.apk");
+            string outputPath = Path.Combine(outputDirectory, "Ballistic-Sniper-Unity-v4.0.0.apk");
             BuildPlayerOptions options = new BuildPlayerOptions
             {
                 scenes = new[] { ScenePath },

@@ -26,7 +26,7 @@ namespace BallisticSniper
     }
 
     /// <summary>
-    /// Compact exterior-ballistics model tuned for a .308 Win match load.
+    /// Compact exterior-ballistics model shared by the selectable rifle loads.
     /// Distance is metres, wind is m/s, time is seconds and angular correction is MIL.
     /// </summary>
     public static class Ballistics
@@ -39,12 +39,20 @@ namespace BallisticSniper
 
         public static BallisticSolution Solve(double rangeMetres, double crossWindMetresPerSecond)
         {
-            double time = TimeOfFlight(rangeMetres);
-            double zeroTime = TimeOfFlight(ZeroDistance);
+            return Solve(rangeMetres, crossWindMetresPerSecond, GameRules.Weapons[0]);
+        }
+
+        public static BallisticSolution Solve(
+            double rangeMetres,
+            double crossWindMetresPerSecond,
+            WeaponDefinition weapon)
+        {
+            double time = TimeOfFlight(rangeMetres, weapon);
+            double zeroTime = TimeOfFlight(ZeroDistance, weapon);
             double zeroAngle = 0.5 * Gravity * zeroTime * zeroTime / ZeroDistance;
             double drop = 0.5 * Gravity * time * time - rangeMetres * zeroAngle;
-            double aerodynamicLag = Math.Max(0.0, time - rangeMetres / MuzzleVelocity);
-            double windDrift = crossWindMetresPerSecond * aerodynamicLag * WindDragFactor;
+            double aerodynamicLag = Math.Max(0.0, time - rangeMetres / weapon.MuzzleVelocity);
+            double windDrift = crossWindMetresPerSecond * aerodynamicLag * weapon.WindDragFactor;
 
             return new BallisticSolution(
                 time,
@@ -60,22 +68,47 @@ namespace BallisticSniper
             double crossWindMetresPerSecond,
             double windageDialMil)
         {
-            BallisticSolution solution = Solve(rangeMetres, crossWindMetresPerSecond);
+            return HorizontalImpact(
+                opticalAxisXMetres,
+                rangeMetres,
+                crossWindMetresPerSecond,
+                windageDialMil,
+                GameRules.Weapons[0]);
+        }
+
+        public static double HorizontalImpact(
+            double opticalAxisXMetres,
+            double rangeMetres,
+            double crossWindMetresPerSecond,
+            double windageDialMil,
+            WeaponDefinition weapon)
+        {
+            BallisticSolution solution = Solve(rangeMetres, crossWindMetresPerSecond, weapon);
             return opticalAxisXMetres + solution.WindDriftMetres +
                    windageDialMil * rangeMetres / 1000.0;
         }
 
         public static double TimeOfFlight(double rangeMetres)
         {
-            double ratio = 1.0 - DragRate * rangeMetres / MuzzleVelocity;
+            return TimeOfFlight(rangeMetres, GameRules.Weapons[0]);
+        }
+
+        public static double TimeOfFlight(double rangeMetres, WeaponDefinition weapon)
+        {
+            double ratio = 1.0 - weapon.DragRate * rangeMetres / weapon.MuzzleVelocity;
             ratio = Math.Max(0.08, ratio);
-            return -Math.Log(ratio) / DragRate;
+            return -Math.Log(ratio) / weapon.DragRate;
         }
 
         public static float VisualFlightSeconds(double rangeMetres)
         {
             // A single 1.25x readable slow-motion factor retains the real TOF ratios.
             return (float)(TimeOfFlight(rangeMetres) * 1.25);
+        }
+
+        public static float VisualFlightSeconds(double rangeMetres, WeaponDefinition weapon)
+        {
+            return (float)(TimeOfFlight(rangeMetres, weapon) * 1.25);
         }
     }
 }

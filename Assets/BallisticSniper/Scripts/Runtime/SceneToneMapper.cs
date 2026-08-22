@@ -29,10 +29,11 @@ namespace BallisticSniper
                 return;
             }
 
-            material.SetFloat("_Exposure", 1.04f);
-            material.SetFloat("_Contrast", 1.02f);
-            material.SetFloat("_Saturation", 0.94f);
-            material.SetFloat("_Vignette", 0.10f);
+            material.SetFloat("_Exposure", 1.14f);
+            material.SetFloat("_Contrast", 1.13f);
+            material.SetFloat("_Saturation", 1.08f);
+            material.SetFloat("_Vignette", 0.035f);
+            material.SetFloat("_Sharpness", 0.42f);
             Graphics.Blit(source, destination, material);
         }
 

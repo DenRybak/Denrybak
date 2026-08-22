@@ -45,9 +45,22 @@ for _ in $(seq 1 120); do
     echo "Android startup exception detected before the menu became ready" >&2
     exit 1
   fi
-  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=3.3.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
     menu_ready=1
     break
+  fi
+  # SwiftShader occasionally creates the Activity before Unity's render
+  # thread starts on a cold API-35 emulator. A clean Activity restart is
+  # deterministic and keeps this check focused on the APK rather than a
+  # transient emulator graphics stall.
+  if [ "$_" = "40" ] || [ "$_" = "80" ]; then
+    adb shell am force-stop "$PACKAGE_NAME"
+    adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 >/dev/null
+    for _pid_try in $(seq 1 15); do
+      app_pid="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
+      [ -n "$app_pid" ] && break
+      sleep 1
+    done
   fi
   sleep 1
 done

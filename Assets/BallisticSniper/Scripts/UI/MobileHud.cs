@@ -19,11 +19,14 @@ namespace BallisticSniper
         public float Breath;
         public bool HoldingBreath;
         public int TargetsCleared;
+        public int TargetTotal;
         public int ShotsRemaining;
         public int Score;
         public bool BonusMode;
         public bool CanFire;
         public Difficulty Difficulty;
+        public CampaignMode Mode;
+        public string WeaponName;
     }
 
     public struct ResultSnapshot
@@ -46,6 +49,10 @@ namespace BallisticSniper
         public int DestroyedCount;
         public int TotalShots;
         public int SuccessfulShots;
+        public bool Operations;
+        public int ExpectedTargets;
+        public int ExpectedDestructibles;
+        public int MaximumScore;
     }
 
     public sealed class MobileHud : MonoBehaviour
@@ -84,6 +91,9 @@ namespace BallisticSniper
         private GameObject cinematicRoot;
 
         private readonly Button[] difficultyButtons = new Button[3];
+        private readonly Button[] campaignButtons = new Button[2];
+        private Button weaponButton;
+        private Text menuSpecsText;
         private Text highScoreText;
         private Text stageText;
         private Text rangeText;
@@ -129,6 +139,7 @@ namespace BallisticSniper
         private Text summaryScore;
         private Text summaryStats;
         private Text cinematicLabel;
+        private Text cinematicWeaponLabel;
 
         // Runtime buttons are dispatched directly on pointer-down. Waiting
         // for uGUI's pointer-up/click sequence proved unreliable on several
@@ -170,7 +181,7 @@ namespace BallisticSniper
             CreateSummary();
             CreatePause();
             CreateCinematic();
-            ShowMenu(0, Difficulty.Shooter);
+            ShowMenu(0, Difficulty.Shooter, CampaignMode.Range, GameRules.Weapons[0]);
         }
 
         private void Update()
@@ -183,7 +194,11 @@ namespace BallisticSniper
             if (reticle != null) reticle.SetScale(pixelsPerMil, ScopeRadius, zoom);
         }
 
-        public void ShowMenu(int highScore, Difficulty difficulty)
+        public void ShowMenu(
+            int highScore,
+            Difficulty difficulty,
+            CampaignMode campaignMode,
+            WeaponDefinition weapon)
         {
             SetRoots(menu: true);
             highScoreText.text = "РЕКОРД  " + highScore;
@@ -204,6 +219,29 @@ namespace BallisticSniper
                 label.text = (selected ? "✓ " : string.Empty) + DifficultyLabels[i];
                 label.color = selected ? Ink : Paper;
             }
+
+            for (int i = 0; i < campaignButtons.Length; i++)
+            {
+                bool selected = i == (int)campaignMode;
+                Graphic graphic = campaignButtons[i].targetGraphic;
+                Color normal = selected ? Gold : new Color32(23, 37, 34, 245);
+                ColorBlock colors = campaignButtons[i].colors;
+                colors.normalColor = normal;
+                colors.highlightedColor = selected ? GoldLight : new Color32(44, 73, 64, 255);
+                colors.pressedColor = selected ? new Color32(201, 143, 45, 255) : new Color32(13, 30, 26, 255);
+                campaignButtons[i].colors = colors;
+                graphic.CrossFadeColor(normal, 0f, true, true);
+                Text label = campaignButtons[i].GetComponentInChildren<Text>();
+                label.color = selected ? Ink : Paper;
+                label.text = (selected ? "✓ " : string.Empty) +
+                    (i == 0 ? "ПОЛИГОН\n5 рубежей" : "ОПЕРАЦИИ\n3 задания");
+            }
+
+            SetButtonLabel(weaponButton, "ОРУЖИЕ  ◀  " + weapon.Name + "  ▶\n" + weapon.Calibre + " • " + weapon.Role);
+            menuSpecsText.text = string.Format(CultureInfo.InvariantCulture,
+                "{0}       НАЧ. СКОРОСТЬ  {1:0} м/с       ОПТИКА  FFP ×4–×16",
+                weapon.Calibre,
+                weapon.MuzzleVelocity);
         }
 
         public void ShowHelp()
@@ -211,7 +249,12 @@ namespace BallisticSniper
             SetRoots(help: true);
         }
 
-        public void ShowBriefing(int stage, StageDefinition definition, float wind, BallisticSolution solution)
+        public void ShowBriefing(
+            int stage,
+            StageDefinition definition,
+            float wind,
+            BallisticSolution solution,
+            WeaponDefinition weapon)
         {
             SetRoots(briefing: true);
             briefingEnterButton.interactable = true;
@@ -223,7 +266,37 @@ namespace BallisticSniper
                 "ДИСТАНЦИЯ\n{0} м\n\nВЕТЕР\n{1:0.0} м/с\n\nЦЕЛЕЙ\n{2}\n\nПАТРОНОВ\n{3}",
                 definition.RangeMetres, Mathf.Abs(wind), GameRules.TargetsPerStage, GameRules.ShotsPerStage);
             briefingSolution.text = string.Format(CultureInfo.InvariantCulture,
-                "TOF  {0:0.00} с    •    ELEV  +{1:0.0} MIL    •    WINDAGE  {2}\nОба барабана: шаг 0,5 MIL    •    FFP ×4–×16",
+                "{3} • {4}\nTOF  {0:0.00} с    •    ELEV  +{1:0.0} MIL    •    WINDAGE  {2}\nОба барабана: шаг 0,5 MIL    •    FFP ×4–×16",
+                solution.TimeSeconds,
+                solution.ElevationMil,
+                FormatWindage((float)-solution.WindMil),
+                weapon.Name,
+                weapon.Calibre);
+        }
+
+        public void ShowOperationBriefing(
+            int stage,
+            OperationDefinition definition,
+            float wind,
+            BallisticSolution solution,
+            WeaponDefinition weapon)
+        {
+            SetRoots(briefing: true);
+            briefingEnterButton.interactable = true;
+            SetButtonLabel(briefingEnterButton, "НА ПОЗИЦИЮ");
+            briefingKicker.text = "ОПЕРАЦИЯ " + (stage + 1) + " / " + GameRules.OperationStages + "  •  НЕ ЗАДЕНЬТЕ ПОСТОРОННИХ";
+            briefingTitle.text = definition.Name;
+            briefingNote.text = definition.Note + "\nЦЕЛЬ: " + definition.TargetDescription;
+            briefingStats.text = string.Format(CultureInfo.InvariantCulture,
+                "ДИСТАНЦИЯ\n{0} м\n\nВЕТЕР\n{1:0.0} м/с\n\nЦЕЛЬ\n1\n\nПАТРОНОВ\n{2}",
+                definition.RangeMetres,
+                Mathf.Abs(wind),
+                definition.Shots);
+            briefingSolution.text = string.Format(CultureInfo.InvariantCulture,
+                "СЛОЖНОСТЬ\n{0}\n\n{1} • {2}\nTOF {3:0.00} с  •  ELEV +{4:0.0} MIL  •  WIND {5}",
+                definition.Complication,
+                weapon.Name,
+                weapon.Calibre,
                 solution.TimeSeconds,
                 solution.ElevationMil,
                 FormatWindage((float)-solution.WindMil));
@@ -247,11 +320,15 @@ namespace BallisticSniper
 
         public void UpdateGameplay(HudSnapshot snapshot)
         {
-            stageText.text = GameRules.StageDefinitions[snapshot.Stage].Name;
+            stageText.text = snapshot.Mode == CampaignMode.Operations
+                ? "ОПЕРАЦИЯ • " + GameRules.OperationDefinitions[snapshot.Stage].Name
+                : GameRules.StageDefinitions[snapshot.Stage].Name;
             rangeText.text = snapshot.Range + " м";
             string arrow = snapshot.Wind >= 0f ? "→" : "←";
             windText.text = string.Format(CultureInfo.InvariantCulture, "ВЕТЕР  {0}  {1:0.0} м/с", arrow, Mathf.Abs(snapshot.Wind));
-            targetText.text = snapshot.BonusMode ? "БОНУСНАЯ СТАЛЬ" : snapshot.TargetsCleared + "/" + GameRules.TargetsPerStage + " ЦЕЛЕЙ";
+            targetText.text = snapshot.Mode == CampaignMode.Operations
+                ? snapshot.TargetsCleared > 0 ? "ЦЕЛЬ ПОДТВЕРЖДЕНА" : "ЦЕЛЬ 0/1"
+                : snapshot.BonusMode ? "БОНУСНАЯ СТАЛЬ" : snapshot.TargetsCleared + "/" + snapshot.TargetTotal + " ЦЕЛЕЙ";
             ammoText.text = snapshot.ShotsRemaining + " ПАТР.";
             scoreText.text = snapshot.Score.ToString(CultureInfo.InvariantCulture);
             elevationText.text = string.Format(CultureInfo.InvariantCulture, "{0:+0.0;-0.0;0.0}", snapshot.ElevationDial);
@@ -264,8 +341,9 @@ namespace BallisticSniper
             fillMax.x = Mathf.Clamp01(snapshot.Breath);
             breathFillRect.anchorMax = fillMax;
             reticleInfoText.text = "FFP  ×" + snapshot.Zoom + "   •   1 MIL";
-            modeText.text = snapshot.Difficulty == Difficulty.Cadet ? "КАДЕТ • БЕЗ КАЧКИ" :
+            string difficultyLabel = snapshot.Difficulty == Difficulty.Cadet ? "КАДЕТ • БЕЗ КАЧКИ" :
                 snapshot.Difficulty == Difficulty.Shooter ? "СТРЕЛОК • СНОС + КАЧКА" : "ЭКСПЕРТ • ПОРЫВЫ";
+            modeText.text = snapshot.WeaponName + " • " + difficultyLabel;
             fireButton.interactable = snapshot.CanFire;
         }
 
@@ -294,13 +372,17 @@ namespace BallisticSniper
         public void ShowSummary(SummarySnapshot snapshot)
         {
             SetRoots(summary: true);
-            summaryRank.text = snapshot.Score >= 650 ? "СНАЙПЕР" : snapshot.Score >= 400 ? "СТРЕЛОК" : "НОВОБРАНЕЦ";
-            summaryScore.text = snapshot.Score + "  /  " + GameRules.CampaignMaxScore;
+            summaryRank.text = snapshot.Operations
+                ? snapshot.HitCount >= GameRules.OperationStages ? "ОПЕРАТОР" : "ЗАДАНИЕ НЕ ЗАВЕРШЕНО"
+                : snapshot.Score >= 650 ? "СНАЙПЕР" : snapshot.Score >= 400 ? "СТРЕЛОК" : "НОВОБРАНЕЦ";
+            summaryScore.text = snapshot.Score + "  /  " + snapshot.MaximumScore;
             int accuracy = snapshot.TotalShots == 0 ? 0 : Mathf.RoundToInt(snapshot.SuccessfulShots * 100f / snapshot.TotalShots);
-            summaryStats.text =
-                "ЦЕЛЕЙ ПОРАЖЕНО\n" + snapshot.HitCount + " / " + GameRules.CampaignTargets +
-                "\n\nРАЗРУШЕНО\n" + snapshot.DestroyedCount + " / " + GameRules.CampaignDestructibles +
-                "\n\nТОЧНОСТЬ\n" + accuracy + "%\n\nЛУЧШИЙ СЧЁТ\n" + snapshot.HighScore;
+            summaryStats.text = snapshot.Operations
+                ? "ЗАДАНИЙ ВЫПОЛНЕНО\n" + snapshot.HitCount + " / " + snapshot.ExpectedTargets +
+                  "\n\nПОСТОРОННИЕ\nНЕ ЗАДЕТЫ\n\nТОЧНОСТЬ\n" + accuracy + "%\n\nЛУЧШИЙ СЧЁТ\n" + snapshot.HighScore
+                : "ЦЕЛЕЙ ПОРАЖЕНО\n" + snapshot.HitCount + " / " + snapshot.ExpectedTargets +
+                  "\n\nРАЗРУШЕНО\n" + snapshot.DestroyedCount + " / " + snapshot.ExpectedDestructibles +
+                  "\n\nТОЧНОСТЬ\n" + accuracy + "%\n\nЛУЧШИЙ СЧЁТ\n" + snapshot.HighScore;
         }
 
         public void ShowPause()
@@ -308,11 +390,12 @@ namespace BallisticSniper
             SetRoots(gameplay: true, pause: true, scope: true);
         }
 
-        public void ShowCinematic(int cameraVariant)
+        public void ShowCinematic(int cameraVariant, WeaponDefinition weapon)
         {
             SetRoots(cinematic: true);
             cinematicLabel.text = string.Format(CultureInfo.InvariantCulture, "BULLET CAM  {0:00}/{1:00}   •   {2}",
                 cameraVariant + 1, GameRules.CinematicNames.Length, GameRules.CinematicNames[cameraVariant]);
+            cinematicWeaponLabel.text = "CINEMATIC IMPACT • " + weapon.Name + " • " + weapon.Calibre + " • PHYSICS";
         }
 
         private void CreateCanvas()
@@ -436,8 +519,8 @@ namespace BallisticSniper
             CreateText(menuRoot.transform, "Kicker", new Vector2(0.075f, 0.82f), new Vector2(0.50f, 0.90f), 22, TextAnchor.MiddleLeft, Mint, FontStyle.Bold).text = "OFFLINE BALLISTICS SIMULATOR";
             CreateText(menuRoot.transform, "Title", new Vector2(0.075f, 0.59f), new Vector2(0.60f, 0.82f), 74, TextAnchor.MiddleLeft, Paper, FontStyle.Bold).text = "BALLISTIC";
             CreateText(menuRoot.transform, "Subtitle", new Vector2(0.078f, 0.53f), new Vector2(0.58f, 0.61f), 31, TextAnchor.MiddleLeft, Gold, FontStyle.Bold).text = "СНАЙПЕРСКИЙ РУБЕЖ • UNITY 3D";
-            CreateText(menuRoot.transform, "Claim", new Vector2(0.078f, 0.46f), new Vector2(0.62f, 0.535f), 22, TextAnchor.MiddleLeft, Paper).text = "Пять целей одновременно. Оптика ×4–×16. Реальная поправка.";
-            CreateText(menuRoot.transform, "Specs", new Vector2(0.078f, 0.36f), new Vector2(0.62f, 0.46f), 20, TextAnchor.MiddleLeft, GoldLight).text = "КАЛИБР  .308 WIN       НАЧ. СКОРОСТЬ  820 м/с       ОПТИКА  FFP ×4–×16";
+            CreateText(menuRoot.transform, "Claim", new Vector2(0.078f, 0.46f), new Vector2(0.62f, 0.535f), 22, TextAnchor.MiddleLeft, Paper).text = "Контрастные объёмные цели. Три винтовки. Полигон и сюжетные операции.";
+            menuSpecsText = CreateText(menuRoot.transform, "Specs", new Vector2(0.078f, 0.36f), new Vector2(0.62f, 0.46f), 20, TextAnchor.MiddleLeft, GoldLight);
 
             for (int i = 0; i < 3; i++)
             {
@@ -446,14 +529,22 @@ namespace BallisticSniper
                 difficultyButtons[i] = CreateButton(menuRoot.transform, "Difficulty " + i, DifficultyLabels[i],
                     new Vector2(left, 0.16f), new Vector2(left + 0.145f, 0.33f), () => game.SetDifficulty((Difficulty)captured), i == 1);
             }
-            CreateText(menuRoot.transform, "Mode Label", new Vector2(0.078f, 0.32f), new Vector2(0.30f, 0.365f), 17, TextAnchor.MiddleLeft, Paper).text = "РЕЖИМ";
+            CreateText(menuRoot.transform, "Mode Label", new Vector2(0.078f, 0.32f), new Vector2(0.30f, 0.365f), 17, TextAnchor.MiddleLeft, Paper).text = "СЛОЖНОСТЬ";
 
-            highScoreText = CreateText(menuRoot.transform, "High Score", new Vector2(0.70f, 0.67f), new Vector2(0.94f, 0.73f), 22, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
+            highScoreText = CreateText(menuRoot.transform, "High Score", new Vector2(0.69f, 0.89f), new Vector2(0.94f, 0.96f), 20, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
+            campaignButtons[0] = CreateButton(menuRoot.transform, "Range Campaign", "ПОЛИГОН\n5 рубежей",
+                new Vector2(0.65f, 0.73f), new Vector2(0.785f, 0.87f), () => game.SetCampaignMode(CampaignMode.Range), false);
+            campaignButtons[1] = CreateButton(menuRoot.transform, "Operations Campaign", "ОПЕРАЦИИ\n3 задания",
+                new Vector2(0.795f, 0.73f), new Vector2(0.93f, 0.87f), () => game.SetCampaignMode(CampaignMode.Operations), false);
+            campaignButtons[0].GetComponentInChildren<Text>().fontSize = 18;
+            campaignButtons[1].GetComponentInChildren<Text>().fontSize = 18;
             startButton = CreateButton(menuRoot.transform, "Start", "НАЧАТЬ", new Vector2(0.72f, 0.51f), new Vector2(0.93f, 0.66f), game.StartCampaign, true);
             startBinding = reliableButtons[reliableButtons.Count - 1];
             startButton.GetComponentInChildren<Text>().fontSize = 31;
-            CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.39f), new Vector2(0.93f, 0.49f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v3.3.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
+            weaponButton = CreateButton(menuRoot.transform, "Weapon Selection", "ОРУЖИЕ", new Vector2(0.72f, 0.34f), new Vector2(0.93f, 0.47f), game.CycleWeapon, false);
+            weaponButton.GetComponentInChildren<Text>().fontSize = 17;
+            CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.72f, 0.21f), new Vector2(0.93f, 0.31f), game.OpenHelp, false);
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v4.0.0  •  Без рекламы  •  Без интернета  •  Без регистрации";
         }
 
         private void CreateHelp()
@@ -461,13 +552,13 @@ namespace BallisticSniper
             helpRoot = CreateRoot("Help", new Color32(3, 10, 9, 235));
             CreateText(helpRoot.transform, "Kicker", new Vector2(0.09f, 0.86f), new Vector2(0.50f, 0.92f), 21, TextAnchor.MiddleLeft, Mint, FontStyle.Bold).text = "ПОЛЕВАЯ ИНСТРУКЦИЯ";
             CreateText(helpRoot.transform, "Title", new Vector2(0.09f, 0.73f), new Vector2(0.75f, 0.87f), 47, TextAnchor.MiddleLeft, Paper, FontStyle.Bold).text = "КАК ПОПАСТЬ С ПЕРВОГО";
-            string[] heads = { "01  ВЫБЕРИ ЦЕЛЬ", "02  КРАТНОСТЬ И СЕТКА", "03  ВНЕСИ ПОПРАВКУ", "04  СОБЕРИ КОМБО" };
+            string[] heads = { "01  ВЫБЕРИ РЕЖИМ", "02  ВЫБЕРИ ОРУЖИЕ", "03  ВНЕСИ ПОПРАВКУ", "04  ЧИТАЙ СЦЕНУ" };
             string[] bodies =
             {
-                "Все пять целей активны одновременно. На поздних рубежах они скользят, качаются и меняют высоту.",
-                "Меняй ×4–×16. FFP-сетка масштабируется вместе с изображением; деления всегда сохраняют значение MIL.",
+                "ПОЛИГОН — пять ярких материальных целей. ОПЕРАЦИИ — три задания с движущейся целью и посторонними.",
+                "RANGER .308 сбалансирован, VEKTOR 6.5 настильнее, TITAN .338 сильнее воздействует на физический ragdoll.",
                 "Слева ELEV, справа WINDAGE. Зажми ДЫХАНИЕ и веди прицел тем же пальцем; вторым пальцем нажми ОГОНЬ.",
-                "У каждого материала свой звук. Бочка запускает цепную реакцию; яблочко включает один из 14 трёхмерных киноповторов."
+                "В операциях собеседники перекрывают цель, окно скрывает корпус, а парапет и охрана усложняют финальный выстрел."
             };
             for (int i = 0; i < 4; i++)
             {
@@ -476,7 +567,7 @@ namespace BallisticSniper
                 CreateText(card.transform, "Head", new Vector2(0.08f, 0.68f), new Vector2(0.92f, 0.93f), 22, TextAnchor.MiddleLeft, Gold, FontStyle.Bold).text = heads[i];
                 CreateText(card.transform, "Body", new Vector2(0.08f, 0.10f), new Vector2(0.92f, 0.69f), 17, TextAnchor.UpperLeft, Paper).text = bodies[i];
             }
-            CreateText(helpRoot.transform, "MIL note", new Vector2(0.09f, 0.13f), new Vector2(0.78f, 0.23f), 19, TextAnchor.MiddleLeft, GoldLight).text = "1 крупное деление = 1 MIL при любой кратности. Бочка рядом с объектом экономит патрон и открывает бонусные выстрелы.";
+            CreateText(helpRoot.transform, "MIL note", new Vector2(0.09f, 0.13f), new Vector2(0.78f, 0.23f), 19, TextAnchor.MiddleLeft, GoldLight).text = "1 крупное деление = 1 MIL при любой кратности. Не стреляй, пока посторонний перекрывает линию огня.";
             CreateButton(helpRoot.transform, "Back", "НАЗАД", new Vector2(0.80f, 0.10f), new Vector2(0.92f, 0.22f), game.CloseHelp, false);
         }
 
@@ -532,7 +623,7 @@ namespace BallisticSniper
         {
             cinematicRoot = CreateRoot("Cinematic Labels");
             cinematicLabel = CreateText(cinematicRoot.transform, "Camera Name", new Vector2(0.24f, 0.87f), new Vector2(0.76f, 0.95f), 22, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
-            CreateText(cinematicRoot.transform, "Slow Motion", new Vector2(0.37f, 0.05f), new Vector2(0.63f, 0.11f), 16, TextAnchor.MiddleCenter, Paper).text = "CINEMATIC IMPACT • .308 WIN";
+            cinematicWeaponLabel = CreateText(cinematicRoot.transform, "Slow Motion", new Vector2(0.30f, 0.05f), new Vector2(0.70f, 0.11f), 16, TextAnchor.MiddleCenter, Paper);
         }
 
         private void SetRoots(

@@ -27,6 +27,8 @@ namespace BallisticSniper.Tests
         public void CampaignContentIsComplete()
         {
             Assert.That(GameRules.StageDefinitions.Length, Is.EqualTo(5));
+            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(3));
+            Assert.That(GameRules.Weapons.Length, Is.EqualTo(3));
             Assert.That(GameRules.CinematicNames.Length, Is.EqualTo(14));
             foreach (StageDefinition stage in GameRules.StageDefinitions)
             {
@@ -34,6 +36,28 @@ namespace BallisticSniper.Tests
                 Assert.That(stage.HeightMil.Length, Is.EqualTo(5));
                 Assert.That(stage.Motions.Length, Is.EqualTo(5));
             }
+            foreach (OperationDefinition operation in GameRules.OperationDefinitions)
+            {
+                Assert.That(operation.RangeMetres, Is.GreaterThan(200));
+                Assert.That(operation.Shots, Is.InRange(4, 5));
+                Assert.That(operation.TargetDescription, Is.Not.Empty);
+                Assert.That(operation.Complication, Is.Not.Empty);
+            }
+        }
+
+        [Test]
+        public void SelectableWeaponsProduceDifferentBallisticSolutions()
+        {
+            BallisticSolution ranger = Ballistics.Solve(610.0, 4.0, GameRules.Weapons[0]);
+            BallisticSolution vektor = Ballistics.Solve(610.0, 4.0, GameRules.Weapons[1]);
+            BallisticSolution titan = Ballistics.Solve(610.0, 4.0, GameRules.Weapons[2]);
+
+            Assert.That(vektor.TimeSeconds, Is.LessThan(ranger.TimeSeconds));
+            Assert.That(titan.TimeSeconds, Is.LessThan(vektor.TimeSeconds));
+            Assert.That(vektor.WindDriftMetres, Is.LessThan(ranger.WindDriftMetres));
+            Assert.That(titan.WindDriftMetres, Is.LessThan(vektor.WindDriftMetres));
+            Assert.That(GameRules.Weapons[2].RagdollImpulse, Is.GreaterThan(GameRules.Weapons[0].RagdollImpulse));
+            Assert.That(Ballistics.Solve(610.0, 4.0).TimeSeconds, Is.EqualTo(ranger.TimeSeconds).Within(1e-9));
         }
 
         [Test]

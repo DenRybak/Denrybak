@@ -8,7 +8,7 @@
 4. Выберите `Ballistic Sniper → Configure Project`.
 5. Выберите `Ballistic Sniper → Build Android APK`.
 
-APK будет сохранён в `Builds/Android/Ballistic-Sniper-Unity-v3.3.0.apk`.
+APK будет сохранён в `Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk`.
 
 ## Через командную строку
 

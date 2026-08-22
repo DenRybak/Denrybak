@@ -165,7 +165,8 @@ jobs:
             -testResults "$GITHUB_WORKSPACE/TestResults/playmode-results.xml" \
             -logFile /dev/stdout
           test -s "$GITHUB_WORKSPACE/TestResults/playmode-results.xml"
-          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v3.3.0.png"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v4.0.0.png"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-operation-v4.0.0.png"
           "$UNITY_EDITOR" \
             -batchmode \
             -nographics \
@@ -174,7 +175,7 @@ jobs:
             -buildTarget Android \
             -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
             -logFile /dev/stdout
-          test -s Builds/Android/Ballistic-Sniper-Unity-v3.3.0.apk
+          test -s Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
 
       - name: Enable KVM for the Android emulator
         run: |
@@ -199,7 +200,7 @@ jobs:
             -camera-back none -camera-front none
           script: >-
             bash Tools/verify_android_start.sh
-            Builds/Android/Ballistic-Sniper-Unity-v3.3.0.apk
+            Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
             com.denis.ballisticsniper.unity
 
       - name: Preserve the Android signature verifier for release signing
@@ -213,7 +214,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.3.0-smoke-test
+          name: Ballistic-Sniper-Unity-v4.0.0-smoke-test
           path: TestResults/
           if-no-files-found: warn
           retention-days: 7
@@ -221,7 +222,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.3.0-apk
-          path: Builds/Android/Ballistic-Sniper-Unity-v3.3.0.apk
+          name: Ballistic-Sniper-Unity-v4.0.0-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
           if-no-files-found: error
           retention-days: 7
