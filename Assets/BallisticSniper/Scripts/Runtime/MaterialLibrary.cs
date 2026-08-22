@@ -39,9 +39,17 @@ namespace BallisticSniper
         {
             atlas = Resources.Load<Texture2D>("BallisticSniper/Textures/range_material_atlas");
             litShader = Resources.Load<Shader>("BallisticSniper/Shaders/AtlasLit") ??
-                        Shader.Find("BallisticSniper/AtlasLit") ?? Shader.Find("Standard");
-            transparentShader = Shader.Find("Standard") ?? litShader;
-            unlitShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+                        Shader.Find("BallisticSniper/AtlasLit");
+            if (litShader == null)
+            {
+                throw new System.InvalidOperationException(
+                    "Required BallisticSniper/AtlasLit shader is missing from Resources.");
+            }
+
+            // Built-in Shader.Find targets can disappear from a stripped Android Player.
+            transparentShader = Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit") ??
+                                Shader.Find("BallisticSniper/TransparentLit") ?? litShader;
+            unlitShader = litShader;
         }
 
         public Material Get(
@@ -64,6 +72,12 @@ namespace BallisticSniper
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
+            if (material.HasProperty("_NormalStrength"))
+            {
+                float normalStrength = surface == Surface.PaperTarget || surface == Surface.CrackedGlass ? 0.35f :
+                    surface == Surface.Snow ? 0.65f : surface == Surface.CorrugatedSteel ? 1.75f : 1.35f;
+                material.SetFloat("_NormalStrength", normalStrength);
+            }
             material.enableInstancing = true;
             materials[key] = material;
             return material;
@@ -122,6 +136,11 @@ namespace BallisticSniper
             {
                 material.SetVector("_AtlasCell", new Vector4(offset.x, offset.y, scale.x, scale.y));
                 material.SetVector("_Tiling", new Vector4(1f, 1f, 0f, 0f));
+                // AtlasLit performs cell selection itself. Keeping Unity's
+                // implicit texture transform at identity avoids selecting the
+                // atlas twice, which previously stretched and darkened cells.
+                material.SetTextureScale("_MainTex", Vector2.one);
+                material.SetTextureOffset("_MainTex", Vector2.zero);
             }
 
             if (material.HasProperty("_BaseMap"))
@@ -133,8 +152,11 @@ namespace BallisticSniper
             if (material.HasProperty("_MainTex"))
             {
                 material.SetTexture("_MainTex", atlas);
-                material.SetTextureScale("_MainTex", scale);
-                material.SetTextureOffset("_MainTex", offset);
+                if (!material.HasProperty("_AtlasCell"))
+                {
+                    material.SetTextureScale("_MainTex", scale);
+                    material.SetTextureOffset("_MainTex", offset);
+                }
             }
         }
 

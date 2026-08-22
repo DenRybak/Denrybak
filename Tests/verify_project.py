@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import hashlib
 import re
 import struct
 import sys
@@ -55,7 +56,7 @@ def check_png(path: Path) -> tuple[int, int]:
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise AssertionError("material atlas is not a valid PNG")
     width, height = struct.unpack(">II", data[16:24])
-    if width < 1024 or height < 1024:
+    if width < 2048 or height < 2048:
         raise AssertionError(f"material atlas too small: {width}x{height}")
     return width, height
 
@@ -67,13 +68,22 @@ def main() -> int:
         "ProjectSettings/EditorBuildSettings.asset",
         "Assets/BallisticSniper/Scenes/BallisticSniper.unity",
         "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/TransparentLit.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/GradientSky.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/PanoramaSky.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader",
+        "Assets/BallisticSniper/Resources/BallisticSniper/Textures/range_panorama_v4.png",
         "Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs",
         "Assets/BallisticSniper/Scripts/Runtime/Ballistics.cs",
         "Assets/BallisticSniper/Scripts/Runtime/GameData.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/HumanMissionActor.cs",
         "Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/RuntimeTypeRetention.cs",
         "Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs",
         "Assets/BallisticSniper/Scripts/UI/MobileHud.cs",
         "Assets/BallisticSniper/Scripts/UI/HudGraphics.cs",
+        "Tools/verify_android_start.sh",
     ]
     for relative in required:
         require(relative)
@@ -87,6 +97,10 @@ def main() -> int:
     game_data = require("Assets/BallisticSniper/Scripts/Runtime/GameData.cs").read_text(encoding="utf-8")
     if game_data.count("new StageDefinition(") != 5:
         raise AssertionError("campaign must define exactly five stages")
+    if game_data.count("new OperationDefinition(") != 3:
+        raise AssertionError("operations campaign must define exactly three missions")
+    if game_data.count("new WeaponDefinition(") != 3:
+        raise AssertionError("weapon selector must define exactly three rifles")
     names_block = re.search(r"CinematicNames\s*=\s*\{(.*?)\};", game_data, re.DOTALL)
     if not names_block or len(re.findall(r'"[^"]+"', names_block.group(1))) != 14:
         raise AssertionError("cinematic name table must contain 14 variants")
@@ -103,13 +117,158 @@ def main() -> int:
     mobile_hud = require("Assets/BallisticSniper/Scripts/UI/MobileHud.cs").read_text(encoding="utf-8")
     reliable_ui_tokens = (
         "DispatchReliableTouches",
+        "InvokeButtonAt(touch.position)",
         "RectTransformUtility.RectangleContainsScreenPoint",
+        "ReliableTapReceiver",
+        "IsStartZone(screenPosition)",
+        "TapStartThroughAndroidFallbackForTests",
+        "TapStartThroughPointerDownForTests",
         "button.targetGraphic = image",
         "image.raycastTarget = false",
-        "image.sprite = null",
+        "image.texture = uiTexture",
+        'label.text = (selected ? "✓ " : string.Empty)',
+        '"v4.0.0  •  Без рекламы',
+        "game.SetCampaignMode(CampaignMode.Operations)",
+        "game.CycleWeapon",
+        "button.onClick.AddListener(binding.Invoke)",
+        "Time.unscaledTime - lastInvokedAt < 0.30f",
+        "SetRoots(result: true, scope: true)",
+        "TapResultActionThroughAndroidFallbackForTests",
+        "ResultActionOverlapsFireForTests",
+        "aimSurface.transform.SetParent(fullScreenRoot, false)",
+        "scopeLayer.transform.SetParent(fullScreenRoot, false)",
+        "TryInvokeSafeZone(elevationPlusBinding",
+        "TryInvokeSafeZone(resultActionBinding",
     )
     if any(token not in mobile_hud for token in reliable_ui_tokens):
         raise AssertionError("Android menu touch fallback or visible button backgrounds are missing")
+    if "ПОДГОТОВКА" in mobile_hud:
+        raise AssertionError("obsolete preparation state can still block campaign launch")
+    game_flow = require("Assets/BallisticSniper/Scripts/Runtime/BallisticGame.cs").read_text(encoding="utf-8")
+    flow_tokens = (
+        "public void CloseHelp()",
+        "PrepareCampaignForMenu(false)",
+        "if (!campaignPrepared) PrepareCampaignForMenu(true);",
+        "ConfigureStage(false)",
+        "public GameScreen CurrentScreen => screen;",
+        "screen = GameScreen.Playing;",
+        "hud.ShowGameplay(BuildHudSnapshot(true), false);",
+        "BALLISTIC_ANDROID_START_OK",
+        "menuVisible=",
+        "worldStageIndex = stage;",
+        "if (screen == GameScreen.Help) CloseHelp();",
+        "OpticalAxisPointAtRange()",
+        "Ballistics.HorizontalImpact",
+        "fireReadyAt = Time.unscaledTime + 0.40f",
+        "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
+        "BALLISTIC_ANDROID_AIM_READY",
+    )
+    if any(token not in game_flow for token in flow_tokens):
+        raise AssertionError("direct START-to-gameplay/help navigation flow is missing")
+
+    rendering = require("Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs").read_text(encoding="utf-8")
+    atlas_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader").read_text(encoding="utf-8")
+    grade_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader").read_text(encoding="utf-8")
+    render_tokens = (
+        "Sky Fill Light",
+        "CreateGroundScatter",
+        "BallisticSniper/Shaders/PanoramaSky",
+        "RenderSettings.ambientIntensity = 1.0f",
+        "MaterialPropertyBlock",
+        "BuildReadabilityFrame",
+        "CreateOperationSetpiece",
+        "ApplyHumanImpact",
+    )
+    shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
+    grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.08f', '"_Sharpness", 0.42f')
+    tone_mapper = require("Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs").read_text(encoding="utf-8")
+    if (any(token not in rendering for token in render_tokens) or
+            any(token not in atlas_shader for token in shader_tokens) or
+            grade_tokens[0] not in grade_shader or
+            grade_tokens[1] not in tone_mapper or grade_tokens[2] not in tone_mapper):
+        raise AssertionError("lighting, texture relief, or material tiling upgrade is missing")
+
+    playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
+    test_tokens = (
+        "StartButtonEntersTheScopeForEveryDifficultyAndRendersTheRange",
+        "Difficulty.Cadet",
+        "Difficulty.Shooter",
+        "Difficulty.Expert",
+        "TapStartThroughAndroidFallbackForTests",
+        "TapStartThroughPointerDownForTests",
+        "TapStartThroughStandardClickForTests",
+        "Is.EqualTo(GameScreen.Playing)",
+        "IsMenuVisible",
+        "runtime-world-v4.0.0.png",
+        "runtime-operation-v4.0.0.png",
+        "OperationsBuildCharactersAndReleaseARealJointedRagdoll",
+        "CharacterJoint",
+        "ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred",
+        "ResultActionOverlapsFireForTests",
+        "AcceptedShotCountForTests",
+        "Sky has a yellow/red colour cast",
+        "Terrain is oversaturated orange",
+    )
+    if any(token not in playmode_test for token in test_tokens):
+        raise AssertionError("real Unity campaign launch/render smoke test is missing")
+    if "WaitForEndOfFrame" in without_strings_and_comments(playmode_test):
+        raise AssertionError("batch-mode render smoke test can hang on WaitForEndOfFrame")
+
+    configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
+    build_tokens = (
+        'PlayerSettings.productName = "Ballistic Sniper 4.0"',
+        'PlayerSettings.bundleVersion = "4.0.0-unity"',
+        '"com.denis.ballisticsniper.unity"',
+        '"Ballistic-Sniper-Unity-v4.0.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 10",
+        "AndroidArchitecture.X86_64",
+    )
+    if any(token not in configurator for token in build_tokens):
+        raise AssertionError("v4.0 update-compatible Android identity is missing")
+
+    stripping_tokens = (
+        "PlayerSettings.stripEngineCode = false",
+        "ManagedStrippingLevel.Low",
+    )
+    retention = require("Assets/link.xml").read_text(encoding="utf-8")
+    runtime_retention = require(
+        "Assets/BallisticSniper/Scripts/Runtime/RuntimeTypeRetention.cs"
+    ).read_text(encoding="utf-8")
+    if (any(token not in configurator for token in stripping_tokens) or
+            "UnityEngine.PhysicsModule" not in retention or
+            any(token not in runtime_retention for token in
+                ("typeof(BoxCollider)", "typeof(SphereCollider)", "typeof(CapsuleCollider)", "typeof(CharacterJoint)"))):
+        raise AssertionError("runtime primitive types can still be stripped from Android")
+
+    material_library = require(
+        "Assets/BallisticSniper/Scripts/Runtime/MaterialLibrary.cs"
+    ).read_text(encoding="utf-8")
+    if ('Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit")' not in material_library or
+            "unlitShader = litShader" not in material_library):
+        raise AssertionError("runtime materials still depend on a strippable built-in shader")
+
+    android_test = require("Tools/verify_android_start.sh").read_text(encoding="utf-8")
+    android_test_tokens = (
+        "adb install -r",
+        "adb shell input tap",
+        "BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu",
+        "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
+        "BALLISTIC_ANDROID_IMPACT_CLOSEUP",
+        "BALLISTIC_ANDROID_RESULT_READY",
+        "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
+        "BALLISTIC_ANDROID_AIM_READY",
+        "BALLISTIC_ANDROID_ELEVATION value=1.0",
+        "android-impact-closeup.png",
+        "android-aim-after-return.png",
+        "android-gameplay-after-tap.png",
+        "android-app-logcat.txt",
+        "android-startup-app-logcat.txt",
+        "Can't add component because class",
+        'pidof "$PACKAGE_NAME" 2>/dev/null',
+        "|| true",
+    )
+    if any(token not in android_test for token in android_test_tokens):
+        raise AssertionError("installed-APK Android tap verification is missing")
 
     visual_200 = time_of_flight(200) * 1.25
     visual_900 = time_of_flight(900) * 1.25
@@ -128,6 +287,14 @@ def main() -> int:
 
     atlas = require("Assets/BallisticSniper/Resources/BallisticSniper/Textures/range_material_atlas.png")
     width, height = check_png(atlas)
+    atlas_parts = sorted((ROOT / "Tools/atlas_parts").glob("range_material_atlas.png.part-*"))
+    if len(atlas_parts) != 10:
+        raise AssertionError("curated material atlas parts are incomplete")
+    rebuilt_atlas = b"".join(part.read_bytes() for part in atlas_parts)
+    if hashlib.sha256(rebuilt_atlas).hexdigest() != "4998f7dd58ddd64f648d60cded2b3e3e3b48f638dc563ca6df13e2f97490a96e":
+        raise AssertionError("curated material atlas checksum mismatch")
+    if rebuilt_atlas != atlas.read_bytes():
+        raise AssertionError("workspace material atlas differs from curated source parts")
 
     audio_dir = ROOT / "Assets/BallisticSniper/Resources/BallisticSniper/Audio"
     expected_audio = {
@@ -147,11 +314,13 @@ def main() -> int:
     if any(token in all_text for token in forbidden_network):
         raise AssertionError("offline guarantee violated by a network API reference")
 
-    print(f"OK: {len(cs_files)} C# files; 5 stages; 14 kill-cams; atlas {width}x{height}; 9 WAV files")
+    print(f"OK: {len(cs_files)} C# files; 5 range stages + 3 operations; 3 weapons; 14 kill-cams; atlas {width}x{height}")
     print(f"OK: visual bullet time 200m={visual_200:.3f}s, 900m={visual_900:.3f}s")
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
-    print("OK: Android buttons have direct touch fallback and renderer-safe backgrounds")
+    print("OK: Android buttons use debounced touch-down plus standard UI click fallback")
+    print("OK: START enters gameplay directly for all three difficulties in the Unity smoke test")
+    print("OK: cinematic panorama, high-contrast target frames, jointed ragdolls and render validation are present")
     return 0
 
 

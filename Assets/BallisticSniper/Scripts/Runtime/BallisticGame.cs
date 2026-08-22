@@ -24,7 +24,10 @@ namespace BallisticSniper
         private GameScreen screen = GameScreen.Menu;
         private GameScreen resumeScreen = GameScreen.Playing;
         private Difficulty difficulty;
+        private CampaignMode campaignMode;
+        private int weaponIndex;
         private int stage;
+        private int worldStageIndex = -1;
         private int zoomIndex;
         private int shotInStage;
         private int totalShots;
@@ -39,6 +42,8 @@ namespace BallisticSniper
         private int destructionStreak;
         private bool demolitionBonusAwarded;
         private bool bonusMode;
+        private bool campaignStarting;
+        private bool campaignPrepared;
 
         private float range;
         private float baseWind;
@@ -84,12 +89,33 @@ namespace BallisticSniper
         private float reviewStartedAt;
         private float resultRevealAt;
         private bool resultShown;
+        private float fireReadyAt;
+        private int acceptedShotCount;
+        private bool awaitingAimAfterResult;
+        private HumanMissionActor lastHumanHit;
+        private bool lastHumanWasPrimary;
+        private bool operationComplete;
+        private bool operationFailed;
 
         public static BallisticGame Instance { get; private set; }
         public float CurrentWind => currentWind;
+        public GameScreen CurrentScreen => screen;
+        public int AcceptedShotCountForTests => acceptedShotCount;
+        public bool IsResultReadyForTests => screen == GameScreen.Result && resultShown;
+        public ShotRecord CurrentShotForTests => currentShot;
+        public CampaignMode CampaignModeForTests => campaignMode;
+        public WeaponDefinition SelectedWeaponForTests => SelectedWeapon;
+
+        private WeaponDefinition SelectedWeapon => GameRules.Weapon(weaponIndex);
+        private int ActiveStageCount => campaignMode == CampaignMode.Operations ? GameRules.OperationStages : GameRules.Stages;
+        private int ActiveShotsPerStage => campaignMode == CampaignMode.Operations
+            ? GameRules.OperationDefinitions[stage].Shots
+            : GameRules.ShotsPerStage;
+        private int ActiveTargetsPerStage => campaignMode == CampaignMode.Operations ? 1 : GameRules.TargetsPerStage;
 
         private void Awake()
         {
+            RuntimeTypeRetention.EnsureLinked();
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
@@ -100,8 +126,10 @@ namespace BallisticSniper
             ConfigureApplication();
 
             difficulty = (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt("difficulty", 1), 0, 2);
+            campaignMode = (CampaignMode)Mathf.Clamp(PlayerPrefs.GetInt("campaign_mode", 0), 0, 1);
+            weaponIndex = Mathf.Clamp(PlayerPrefs.GetInt("weapon_index", 0), 0, GameRules.Weapons.Length - 1);
             zoomIndex = Mathf.Clamp(PlayerPrefs.GetInt("zoom_index", 0), 0, GameRules.ZoomLevels.Length - 1);
-            highScore = PlayerPrefs.GetInt("high_score", 0);
+            highScore = PlayerPrefs.GetInt(HighScoreKey(), PlayerPrefs.GetInt("high_score", 0));
 
             CreateCamera();
             CreateWorld();
@@ -109,9 +137,11 @@ namespace BallisticSniper
             CreateHud();
             CreateKillCam();
 
-            world.BuildStage(0, difficulty);
-            ResetCameraForMenu();
-            hud.ShowMenu(highScore, difficulty);
+            world.BuildStage(0, difficulty, campaignMode);
+            worldStageIndex = 0;
+            PrepareCampaignForMenu(false);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu");
         }
 
         private void Update()
@@ -153,6 +183,7 @@ namespace BallisticSniper
                     {
                         resultShown = true;
                         hud.ShowResult(BuildResultSnapshot());
+                        LogResultReady();
                     }
                     break;
             }
@@ -164,25 +195,69 @@ namespace BallisticSniper
             difficulty = selected;
             PlayerPrefs.SetInt("difficulty", (int)difficulty);
             PlayerPrefs.Save();
-            hud.ShowMenu(highScore, difficulty);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+        }
+
+        public void SetCampaignMode(CampaignMode selected)
+        {
+            if (screen != GameScreen.Menu || selected == campaignMode) return;
+            campaignMode = selected;
+            PlayerPrefs.SetInt("campaign_mode", (int)campaignMode);
+            highScore = PlayerPrefs.GetInt(HighScoreKey(), 0);
+            PlayerPrefs.Save();
+            PrepareCampaignForMenu(true);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+        }
+
+        public void CycleWeapon()
+        {
+            if (screen != GameScreen.Menu) return;
+            weaponIndex = (weaponIndex + 1) % GameRules.Weapons.Length;
+            PlayerPrefs.SetInt("weapon_index", weaponIndex);
+            PlayerPrefs.Save();
+            displayedSolution = Ballistics.Solve(range, currentWind, SelectedWeapon);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
         }
 
         public void StartCampaign()
         {
-            Time.timeScale = 1f;
-            stage = 0;
-            shotInStage = 0;
-            totalShots = 0;
-            score = 0;
-            hitCount = 0;
-            successfulShots = 0;
-            destroyedCount = 0;
-            ConfigureStage();
-            screen = GameScreen.Briefing;
-            ShowBriefing();
+            if (screen != GameScreen.Menu || campaignStarting) return;
+            campaignStarting = true;
+            try
+            {
+                Time.timeScale = 1f;
+                if (!campaignPrepared) PrepareCampaignForMenu(true);
+
+                // Everything expensive is prepared while the menu is open.
+                // Hide the menu first, then update the camera and HUD. Even a
+                // device-specific rendering error can no longer leave START
+                // apparently stuck over a changed background.
+                screen = GameScreen.Playing;
+                campaignPrepared = false;
+                hud.ShowGameplay(BuildHudSnapshot(true), false);
+                ResetAim();
+                UpdateWind();
+                UpdatePlayerCamera();
+                RefreshGameplayHud(true);
+                Debug.Log("BALLISTIC_ANDROID_START_OK screen=" + screen +
+                          " menuVisible=" + hud.IsMenuVisible +
+                          " gameplayVisible=" + hud.IsGameplayVisible +
+                          " scopeVisible=" + hud.IsScopeVisible +
+                          " difficulty=" + difficulty +
+                          " mode=" + campaignMode +
+                          " weapon=" + SelectedWeapon.Name);
+            }
+            finally
+            {
+                campaignStarting = false;
+            }
         }
 
-        public void RestartCampaign() => StartCampaign();
+        public void RestartCampaign()
+        {
+            OpenMenu();
+            StartCampaign();
+        }
 
         public void OpenHelp()
         {
@@ -191,16 +266,29 @@ namespace BallisticSniper
             hud.ShowHelp();
         }
 
+        public void CloseHelp()
+        {
+            if (screen != GameScreen.Help) return;
+            screen = GameScreen.Menu;
+            ResetCameraForMenu();
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+        }
+
         public void OpenMenu()
         {
+            if (screen == GameScreen.Help)
+            {
+                CloseHelp();
+                return;
+            }
+
             Time.timeScale = 1f;
+            campaignStarting = false;
             StopTransientShot();
             screen = GameScreen.Menu;
             holdingBreath = false;
-            stage = 0;
-            world.BuildStage(0, difficulty);
-            ResetCameraForMenu();
-            hud.ShowMenu(highScore, difficulty);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+            PrepareCampaignForMenu(true);
         }
 
         public void EnterRange()
@@ -218,6 +306,8 @@ namespace BallisticSniper
         {
             if (screen != GameScreen.Playing) return;
             elevationDialMil = Mathf.Clamp(elevationDialMil + deltaMil, 0f, 15f);
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_ELEVATION value={0:0.0}", elevationDialMil));
             RefreshGameplayHud(true);
         }
 
@@ -257,18 +347,24 @@ namespace BallisticSniper
             float maxAngle = 13f * MilToDegrees;
             aimYawDegrees = Mathf.Clamp(aimYawDegrees, -maxAngle, maxAngle);
             aimPitchDegrees = Mathf.Clamp(aimPitchDegrees, -maxAngle, maxAngle);
+            if (awaitingAimAfterResult && screen == GameScreen.Playing)
+            {
+                awaitingAimAfterResult = false;
+                Debug.Log("BALLISTIC_ANDROID_AIM_READY screen=Playing acceptedShots=" + acceptedShotCount);
+            }
         }
 
         public void Fire()
         {
-            if (screen != GameScreen.Playing || shotInStage >= GameRules.ShotsPerStage) return;
+            if (!CanAcceptFire()) return;
 
-            BallisticSolution solution = Ballistics.Solve(range, currentWind);
-            Vector2 aimPoint = EffectiveAimPointAtRange();
+            WeaponDefinition weapon = SelectedWeapon;
+            BallisticSolution solution = Ballistics.Solve(range, currentWind, weapon);
+            Vector3 opticalAimPoint = OpticalAxisPointAtRange();
             float metresPerMil = range / 1000f;
             Vector3 impact = new Vector3(
-                aimPoint.x + (float)solution.WindDriftMetres + windageDialMil * metresPerMil,
-                aimPoint.y - (float)solution.DropMetres + elevationDialMil * metresPerMil,
+                (float)Ballistics.HorizontalImpact(opticalAimPoint.x, range, currentWind, windageDialMil, weapon),
+                opticalAimPoint.y - (float)solution.DropMetres + elevationDialMil * metresPerMil,
                 range);
 
             firingCameraPosition = playerCamera.transform.position;
@@ -280,19 +376,25 @@ namespace BallisticSniper
                 Impact = impact,
                 TargetCentre = new Vector3(0f, CameraHeight, range),
                 Solution = solution,
-                VisualDuration = Ballistics.VisualFlightSeconds(range),
+                VisualDuration = Ballistics.VisualFlightSeconds(range, weapon),
                 WindMetresPerSecond = currentWind,
                 RangeMetres = range
             };
             shotSceneClock = sceneClock;
             flightElapsed = 0f;
             screen = GameScreen.Flight;
+            acceptedShotCount++;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_FIRE_ACCEPTED shot={0} wind={1:+0.00;-0.00;0.00} impact={2:+0.000;-0.000;0.000},{3:+0.000;-0.000;0.000} optical={4:+0.000;-0.000;0.000},{5:+0.000;-0.000;0.000} elev={6:0.0} windage={7:+0.0;-0.0;0.0}",
+                acceptedShotCount, currentWind, impact.x, impact.y, opticalAimPoint.x, opticalAimPoint.y,
+                elevationDialMil, windageDialMil));
 
-            recoilMilX = 0.06f + Random.value * 0.08f;
-            recoilMilY = 0.18f + Random.value * 0.09f;
-            recoilVelocityX = -2f + Random.value * 8f;
-            recoilVelocityY = 28f + Random.value * 6f;
-            PlaySound("shot", 0.88f, 1f);
+            recoilMilX = (0.06f + Random.value * 0.08f) * weapon.RecoilMultiplier;
+            recoilMilY = (0.18f + Random.value * 0.09f) * weapon.RecoilMultiplier;
+            recoilVelocityX = (-2f + Random.value * 8f) * weapon.RecoilMultiplier;
+            recoilVelocityY = (28f + Random.value * 6f) * weapon.RecoilMultiplier;
+            PlaySound("shot", Mathf.Clamp01(0.80f + weapon.RecoilMultiplier * 0.10f),
+                weapon.Kind == WeaponKind.Vektor65 ? 1.08f : weapon.Kind == WeaponKind.Titan338 ? 0.86f : 1f);
             SpawnMuzzleFlash(currentShot.Start);
             LaunchTracer();
             hud.ShowGameplay(BuildHudSnapshot(false), true);
@@ -305,22 +407,56 @@ namespace BallisticSniper
             deferredSteelHide = null;
             RemoveImpactMarker();
 
-            if (shotInStage < GameRules.ShotsPerStage)
+            if (campaignMode == CampaignMode.Operations)
             {
-                if (targetsCleared >= GameRules.TargetsPerStage && !bonusMode)
+                if (operationFailed)
+                {
+                    ConfigureStage();
+                    screen = GameScreen.Briefing;
+                    ShowBriefing();
+                    return;
+                }
+                if (operationComplete)
+                {
+                    if (stage < ActiveStageCount - 1)
+                    {
+                        stage++;
+                        ConfigureStage();
+                        screen = GameScreen.Briefing;
+                        ShowBriefing();
+                    }
+                    else
+                    {
+                        ShowCampaignSummary();
+                    }
+                    return;
+                }
+                if (shotInStage < ActiveShotsPerStage)
+                {
+                    ReturnToAimAfterReview();
+                    return;
+                }
+
+                operationFailed = true;
+                ConfigureStage();
+                screen = GameScreen.Briefing;
+                ShowBriefing();
+                return;
+            }
+
+            if (shotInStage < ActiveShotsPerStage)
+            {
+                if (targetsCleared >= ActiveTargetsPerStage && !bonusMode)
                 {
                     bonusMode = true;
                     destructionStreak = 0;
                     world.ShowBonusTarget();
                 }
-                ResetAim();
-                screen = GameScreen.Playing;
-                RefreshGameplayHud(true);
-                hud.ShowGameplay(BuildHudSnapshot(true), false);
+                ReturnToAimAfterReview();
                 return;
             }
 
-            if (stage < GameRules.Stages - 1)
+            if (stage < ActiveStageCount - 1)
             {
                 stage++;
                 ConfigureStage();
@@ -329,10 +465,30 @@ namespace BallisticSniper
                 return;
             }
 
+            ShowCampaignSummary();
+        }
+
+        private void ReturnToAimAfterReview()
+        {
+            ResetAim();
+            screen = GameScreen.Playing;
+            // A release from the result button must never fall through to
+            // the fire control that appears underneath it on the next frame.
+            fireReadyAt = Time.unscaledTime + 0.40f;
+            awaitingAimAfterResult = true;
+            RefreshGameplayHud(false);
+            hud.ShowGameplay(BuildHudSnapshot(false), false);
+            Debug.Log("BALLISTIC_ANDROID_RETURN_TO_TARGETS screen=Playing fireLocked=True gameplayVisible=" +
+                      hud.IsGameplayVisible + " scopeVisible=" + hud.IsScopeVisible);
+        }
+
+        private void ShowCampaignSummary()
+        {
             if (score > highScore)
             {
                 highScore = score;
-                PlayerPrefs.SetInt("high_score", highScore);
+                PlayerPrefs.SetInt(HighScoreKey(), highScore);
+                if (campaignMode == CampaignMode.Range) PlayerPrefs.SetInt("high_score", highScore);
                 PlayerPrefs.Save();
             }
             screen = GameScreen.Summary;
@@ -344,7 +500,11 @@ namespace BallisticSniper
                 HitCount = hitCount,
                 DestroyedCount = destroyedCount,
                 TotalShots = totalShots,
-                SuccessfulShots = successfulShots
+                SuccessfulShots = successfulShots,
+                Operations = campaignMode == CampaignMode.Operations,
+                ExpectedTargets = campaignMode == CampaignMode.Operations ? GameRules.OperationStages : GameRules.CampaignTargets,
+                ExpectedDestructibles = campaignMode == CampaignMode.Operations ? 0 : GameRules.CampaignDestructibles,
+                MaximumScore = campaignMode == CampaignMode.Operations ? GameRules.OperationMaxScore : GameRules.CampaignMaxScore
             });
         }
 
@@ -380,7 +540,11 @@ namespace BallisticSniper
             QualitySettings.shadowDistance = 1200f;
             QualitySettings.shadowResolution = ShadowResolution.High;
             QualitySettings.shadows = ShadowQuality.All;
-            QualitySettings.pixelLightCount = 4;
+            QualitySettings.shadowCascades = 4;
+            QualitySettings.shadowProjection = ShadowProjection.StableFit;
+            QualitySettings.pixelLightCount = 6;
+            QualitySettings.lodBias = Mathf.Max(QualitySettings.lodBias, 1.65f);
+            QualitySettings.maximumLODLevel = 0;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Input.multiTouchEnabled = true;
             if (Application.isMobilePlatform)
@@ -405,6 +569,7 @@ namespace BallisticSniper
             playerCamera.allowMSAA = true;
             playerCamera.depthTextureMode = DepthTextureMode.Depth;
             playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
+            playerCamera.gameObject.AddComponent<SceneToneMapper>();
         }
 
         private void CreateWorld()
@@ -447,10 +612,39 @@ namespace BallisticSniper
             killCam.Initialize(playerCamera, bulletMaterial);
         }
 
-        private void ConfigureStage()
+        private void PrepareCampaignForMenu(bool rebuildWorld)
         {
-            StageDefinition definition = GameRules.StageDefinitions[stage];
-            range = definition.RangeMetres;
+            Time.timeScale = 1f;
+            StopTransientShot();
+            stage = 0;
+            shotInStage = 0;
+            totalShots = 0;
+            acceptedShotCount = 0;
+            fireReadyAt = 0f;
+            score = 0;
+            hitCount = 0;
+            successfulShots = 0;
+            destroyedCount = 0;
+
+            if (rebuildWorld || worldStageIndex != stage)
+            {
+                world.BuildStage(stage, difficulty, campaignMode);
+                worldStageIndex = stage;
+            }
+
+            ConfigureStage(false);
+            campaignPrepared = true;
+            ResetCameraForMenu();
+        }
+
+        private void ConfigureStage(bool rebuildWorld = true)
+        {
+            StageDefinition rangeDefinition = campaignMode == CampaignMode.Range
+                ? GameRules.StageDefinitions[stage]
+                : default(StageDefinition);
+            range = campaignMode == CampaignMode.Operations
+                ? GameRules.OperationDefinitions[stage].RangeMetres
+                : rangeDefinition.RangeMetres;
             shotInStage = 0;
             targetsCleared = 0;
             elevationDialMil = 0f;
@@ -462,14 +656,21 @@ namespace BallisticSniper
             demolitionBonusAwarded = false;
             lastChainReaction = 0;
             lastBullseye = false;
+            operationComplete = false;
+            operationFailed = false;
+            lastHumanHit = null;
+            lastHumanWasPrimary = false;
             sceneClock = 0f;
 
-            for (int i = 0; i < definition.Targets.Length; i++)
+            if (campaignMode == CampaignMode.Range)
             {
-                if (definition.Targets[i] != TargetKind.Steel) roundDestructiblesTotal++;
+                for (int i = 0; i < rangeDefinition.Targets.Length; i++)
+                {
+                    if (rangeDefinition.Targets[i] != TargetKind.Steel) roundDestructiblesTotal++;
+                }
             }
 
-            float maxWind = 1.3f + stage * 1.25f;
+            float maxWind = (campaignMode == CampaignMode.Operations ? 1.8f : 1.3f) + stage * 1.25f;
             baseWind = Mathf.Lerp(-maxWind, maxWind, (float)random.NextDouble());
             if (stage > 0 && Mathf.Abs(baseWind) < 0.75f)
             {
@@ -477,18 +678,24 @@ namespace BallisticSniper
                 baseWind = sign * Mathf.Lerp(0.75f, 1.20f, (float)random.NextDouble());
             }
             currentWind = baseWind;
-            displayedSolution = Ballistics.Solve(range, currentWind);
+            displayedSolution = Ballistics.Solve(range, currentWind, SelectedWeapon);
 
-            world.BuildStage(stage, difficulty);
+            if (rebuildWorld)
+            {
+                world.BuildStage(stage, difficulty, campaignMode);
+                worldStageIndex = stage;
+            }
             ResetAim();
             ResetCameraForBriefing();
         }
 
         private void ShowBriefing()
         {
-            StageDefinition definition = GameRules.StageDefinitions[stage];
-            BallisticSolution solution = Ballistics.Solve(range, baseWind);
-            hud.ShowBriefing(stage, definition, baseWind, solution);
+            BallisticSolution solution = Ballistics.Solve(range, baseWind, SelectedWeapon);
+            if (campaignMode == CampaignMode.Operations)
+                hud.ShowOperationBriefing(stage, GameRules.OperationDefinitions[stage], baseWind, solution, SelectedWeapon);
+            else
+                hud.ShowBriefing(stage, GameRules.StageDefinitions[stage], baseWind, solution, SelectedWeapon);
         }
 
         private void ResetAim()
@@ -508,9 +715,12 @@ namespace BallisticSniper
             lastDemolitionBonus = false;
             lastChainReaction = 0;
             lastBullseye = false;
+            lastHumanHit = null;
+            lastHumanWasPrimary = false;
             deferredSteelHide = null;
             deferredBonusImpact = false;
             resultShown = false;
+            awaitingAimAfterResult = false;
             RemoveImpactMarker();
             playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
             ApplyScopeFov();
@@ -521,7 +731,7 @@ namespace BallisticSniper
             float gust = difficulty == Difficulty.Cadet ? 0f :
                 Mathf.Sin(sceneClock * 0.81f + stage * 1.7f) * (difficulty == Difficulty.Shooter ? 0.22f : 0.62f);
             currentWind = baseWind + gust;
-            displayedSolution = Ballistics.Solve(range, currentWind);
+            displayedSolution = Ballistics.Solve(range, currentWind, SelectedWeapon);
         }
 
         private void UpdateSway()
@@ -584,19 +794,33 @@ namespace BallisticSniper
             hud?.SetReticleScale(pixelsPerMil, GameRules.ZoomLevels[zoomIndex]);
         }
 
-        private Vector2 EffectiveAimPointAtRange()
+        private Vector3 OpticalAxisPointAtRange()
         {
-            float yaw = aimYawDegrees + (swayMilX + recoilMilX) * MilToDegrees;
-            float pitch = aimPitchDegrees + (swayMilY + recoilMilY) * MilToDegrees;
-            return new Vector2(
-                Mathf.Tan(yaw * Mathf.Deg2Rad) * range,
-                CameraHeight + Mathf.Tan(pitch * Mathf.Deg2Rad) * range);
+            Ray opticalRay = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+            float forward = opticalRay.direction.z;
+            if (Mathf.Abs(forward) < 0.0001f)
+            {
+                return new Vector3(opticalRay.origin.x, opticalRay.origin.y, range);
+            }
+            float distance = (range - opticalRay.origin.z) / forward;
+            Vector3 point = opticalRay.GetPoint(distance);
+            point.z = range;
+            return point;
+        }
+
+        public Vector3 OpticalAxisPointForTests() => OpticalAxisPointAtRange();
+
+        private bool CanAcceptFire()
+        {
+            return screen == GameScreen.Playing &&
+                   shotInStage < ActiveShotsPerStage &&
+                   Time.unscaledTime >= fireReadyAt;
         }
 
         private void LaunchTracer()
         {
             GameObject bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            bullet.name = "Visible .308 Tracer";
+            bullet.name = "Visible " + SelectedWeapon.Calibre + " Tracer";
             bullet.transform.SetParent(transform, true);
             activeProjectile = bullet.AddComponent<ProjectileTracer>();
             activeProjectile.Begin(
@@ -618,6 +842,12 @@ namespace BallisticSniper
             lastDemolitionBonus = false;
             lastBonusShot = bonusMode;
             lastChainReaction = 0;
+
+            if (campaignMode == CampaignMode.Operations)
+            {
+                ResolveOperationShot();
+                return;
+            }
 
             TargetActor nearest = world.FindBestTarget(currentShot.Impact, out float normalizedDistance);
             lastReviewedTarget = nearest;
@@ -685,6 +915,10 @@ namespace BallisticSniper
             score += lastShotScore;
             totalShots++;
             shotInStage++;
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_SHOT_RESOLVED score={0} bullseye={1} error={2:+0.000;-0.000;0.000},{3:+0.000;-0.000;0.000} target={4:+0.000;-0.000;0.000},{5:+0.000;-0.000;0.000}",
+                lastShotScore, lastBullseye, lastError.x, lastError.y,
+                currentShot.TargetCentre.x, currentShot.TargetCentre.y));
             CalculateReview();
             if (!lastBullseye) SpawnImpactMarker();
 
@@ -696,6 +930,80 @@ namespace BallisticSniper
             {
                 float delay = lastHitDestructible ? (lastReviewedTarget != null && lastReviewedTarget.Kind == TargetKind.ExplosiveBarrel ? 1.55f : 1.25f) : 0.30f;
                 EnterResult(delay);
+            }
+        }
+
+        private void ResolveOperationShot()
+        {
+            HumanMissionActor actor = world.FindHumanImpact(currentShot.Impact, out float normalizedDistance);
+            HumanMissionActor primary = world.PrimaryHuman;
+            lastReviewedTarget = null;
+            lastHumanHit = null;
+            lastHumanWasPrimary = false;
+
+            HumanMissionActor reviewActor = actor != null ? actor : primary;
+            if (reviewActor != null)
+            {
+                currentShot.TargetCentre = reviewActor.AimCentre;
+                lastError = reviewActor.ErrorFromCentre(currentShot.Impact);
+            }
+            else
+            {
+                currentShot.TargetCentre = new Vector3(0f, CameraHeight, range);
+                lastError = new Vector2(currentShot.Impact.x, currentShot.Impact.y - CameraHeight);
+            }
+
+            bool blocked = world.IsOperationImpactBlocked(currentShot.Impact);
+            bool humanHit = actor != null && actor.ContainsImpact(currentShot.Impact) && !blocked;
+            if (humanHit)
+            {
+                lastHumanHit = actor;
+                lastHumanWasPrimary = actor.IsPrimary;
+                world.ApplyHumanImpact(
+                    actor,
+                    currentShot.Impact,
+                    currentShot.Impact - currentShot.Start,
+                    SelectedWeapon.RagdollImpulse);
+                PlaySound("hit", 0.92f, actor.IsPrimary ? 0.92f : 1.08f);
+                if (actor.IsPrimary)
+                {
+                    operationComplete = true;
+                    targetsCleared = 1;
+                    hitCount++;
+                    successfulShots++;
+                    lastShotScore = 100;
+                    score += lastShotScore;
+                }
+                else
+                {
+                    operationFailed = true;
+                }
+            }
+
+            totalShots++;
+            shotInStage++;
+            if (!humanHit && shotInStage >= ActiveShotsPerStage) operationFailed = true;
+
+            Debug.Log(string.Format(CultureInfo.InvariantCulture,
+                "BALLISTIC_ANDROID_OPERATION_RESOLVED stage={0} hit={1} primary={2} blocked={3} ragdoll={4} weapon={5} error={6:+0.000;-0.000;0.000},{7:+0.000;-0.000;0.000}",
+                stage + 1,
+                humanHit,
+                lastHumanWasPrimary,
+                blocked,
+                lastHumanHit != null && lastHumanHit.IsRagdolled,
+                SelectedWeapon.Name,
+                lastError.x,
+                lastError.y));
+
+            CalculateReview();
+            if (humanHit)
+            {
+                BeginKillCam();
+            }
+            else
+            {
+                SpawnImpactMarker();
+                EnterResult(0.34f);
             }
         }
 
@@ -730,14 +1038,14 @@ namespace BallisticSniper
             float focalPixels = hud.CanvasHeight / (2f * Mathf.Tan(fov * Mathf.Deg2Rad * 0.5f));
             float pixelsPerMil = focalPixels * 0.001f;
             float visibleRadiusMil = hud.ScopeRadius * 0.56f / Mathf.Max(0.1f, pixelsPerMil);
-            reviewZoom = Mathf.Clamp(visibleRadiusMil / Mathf.Max(0.55f, targetRadiusMil + separationMil * 0.55f), 1f, 3f);
+            reviewZoom = Mathf.Clamp(visibleRadiusMil / Mathf.Max(0.55f, targetRadiusMil + separationMil * 0.55f), 2.5f, 8f);
 
             reviewStartRotation = firingCameraRotation;
             Vector3 reviewCentre = (currentShot.Impact + currentShot.TargetCentre) * 0.5f;
             Vector3 direction = reviewCentre - firingCameraPosition;
             reviewTargetRotation = direction.sqrMagnitude > 0.001f ? Quaternion.LookRotation(direction.normalized, Vector3.up) : firingCameraRotation;
             reviewStartFov = firingCameraFov;
-            reviewTargetFov = firingCameraFov / reviewZoom;
+            reviewTargetFov = Mathf.Max(1.25f, firingCameraFov / reviewZoom);
         }
 
         private void BeginKillCam()
@@ -750,13 +1058,15 @@ namespace BallisticSniper
             previousCinematicVariant = variant;
             screen = GameScreen.Cinematic;
             holdingBreath = false;
-            hud.ShowCinematic(variant);
+            Time.timeScale = campaignMode == CampaignMode.Operations ? 0.28f : 0.42f;
+            hud.ShowCinematic(variant, SelectedWeapon);
             killCam.Begin(currentShot, variant, OnKillCamComplete);
         }
 
         private void OnKillCamComplete()
         {
-            PlaySound("bullseye", 0.80f, 1f);
+            Time.timeScale = 1f;
+            PlaySound(campaignMode == CampaignMode.Operations ? "hit" : "bullseye", 0.80f, 1f);
             if (deferredBonusImpact)
             {
                 world.AddBonusImpact(lastError);
@@ -776,8 +1086,18 @@ namespace BallisticSniper
             reviewStartedAt = Time.unscaledTime;
             resultRevealAt = Time.unscaledTime + revealDelay;
             resultShown = revealDelay <= 0f;
-            if (resultShown) hud.ShowResult(BuildResultSnapshot());
+            if (resultShown)
+            {
+                hud.ShowResult(BuildResultSnapshot());
+                LogResultReady();
+            }
             else hud.ShowImpactWait(BuildHudSnapshot(false));
+        }
+
+        private void LogResultReady()
+        {
+            Debug.Log("BALLISTIC_ANDROID_RESULT_READY screen=Result gameplayVisible=" + hud.IsGameplayVisible +
+                      " resultVisible=" + hud.IsResultVisible + " acceptedShots=" + acceptedShotCount);
         }
 
         private void UpdateReviewCamera()
@@ -792,7 +1112,13 @@ namespace BallisticSniper
         private ResultSnapshot BuildResultSnapshot()
         {
             string headline;
-            if (lastBullseye) headline = "ЯБЛОЧКО";
+            if (campaignMode == CampaignMode.Operations)
+            {
+                headline = lastHumanHit != null
+                    ? lastHumanWasPrimary ? "ЦЕЛЬ УСТРАНЕНА" : "ПОСТОРОННИЙ ЗАДЕТ"
+                    : operationFailed ? "ЗАДАНИЕ ПРОВАЛЕНО" : "ПРОМАХ";
+            }
+            else if (lastBullseye) headline = "ЯБЛОЧКО";
             else if (lastChainReaction > 0) headline = "ЦЕПЬ ×" + (lastChainReaction + 1);
             else if (lastDemolitionBonus) headline = "РАЗРУШИТЕЛЬ";
             else if (lastHitDestructible && destructionStreak > 1) headline = "КОМБО ×" + destructionStreak;
@@ -801,18 +1127,36 @@ namespace BallisticSniper
             else headline = lastShotScore >= 10 ? "ДЕСЯТКА" : lastShotScore == 7 ? "ТОЧНО" : lastShotScore == 4 ? "ЗАЧЁТ" : "ПРОМАХ";
 
             float metresPerMil = range / 1000f;
-            string targetNote = lastChainReaction > 0 && lastReviewedTarget != null
+            string targetNote = campaignMode == CampaignMode.Operations
+                ? lastHumanHit != null
+                    ? lastHumanWasPrimary
+                        ? "ПОДТВЕРЖДЕНИЕ • RAGDOLL PHYSICS"
+                        : "ОГОНЬ ПО ПОСТОРОННИМ ЗАПРЕЩЁН"
+                    : world.IsOperationImpactBlocked(currentShot.Impact)
+                        ? "ПУЛЯ ОСТАНОВЛЕНА УКРЫТИЕМ"
+                        : "ЦЕЛЬ НЕ ПОРАЖЕНА"
+                : lastChainReaction > 0 && lastReviewedTarget != null
                 ? GameRules.TargetName(lastReviewedTarget.Kind) + " • +" + lastChainReaction + " ЦЕЛЬ"
                 : lastHitDestructible && lastReviewedTarget != null
                     ? GameRules.TargetName(lastReviewedTarget.Kind)
                     : lastBonusShot ? "БОНУСНАЯ СТАЛЬ • ОЧКИ ×2"
                     : lastShotScore > 0 ? "СТАЛЬНАЯ МИШЕНЬ" : "МЕТКА — МЕСТО ПУЛИ";
 
-            bool stageFinished = shotInStage >= GameRules.ShotsPerStage;
-            string actionLabel = stageFinished
-                ? stage == GameRules.Stages - 1 ? "РЕЗУЛЬТАТ" : "СЛЕДУЮЩИЕ " + GameRules.StageDefinitions[stage + 1].RangeMetres + " м"
-                : targetsCleared >= GameRules.TargetsPerStage && !bonusMode ? "БОНУСНАЯ МИШЕНЬ"
-                : bonusMode ? "ЕЩЁ БОНУСНЫЙ" : "К ЦЕЛЯМ";
+            bool stageFinished = shotInStage >= ActiveShotsPerStage;
+            string actionLabel;
+            if (campaignMode == CampaignMode.Operations)
+            {
+                actionLabel = operationFailed ? "ПОВТОРИТЬ ЗАДАНИЕ" :
+                    operationComplete ? stage == ActiveStageCount - 1 ? "ИТОГ ОПЕРАЦИИ" : "СЛЕДУЮЩЕЕ ЗАДАНИЕ" :
+                    stageFinished ? "ПОВТОРИТЬ ЗАДАНИЕ" : "ПОВТОРНЫЙ ВЫСТРЕЛ";
+            }
+            else
+            {
+                actionLabel = stageFinished
+                    ? stage == ActiveStageCount - 1 ? "РЕЗУЛЬТАТ" : "СЛЕДУЮЩИЕ " + GameRules.StageDefinitions[stage + 1].RangeMetres + " м"
+                    : targetsCleared >= ActiveTargetsPerStage && !bonusMode ? "БОНУСНАЯ МИШЕНЬ"
+                    : bonusMode ? "ЕЩЁ БОНУСНЫЙ" : "К ЦЕЛЯМ";
+            }
 
             return new ResultSnapshot
             {
@@ -841,11 +1185,14 @@ namespace BallisticSniper
                 Breath = breath,
                 HoldingBreath = holdingBreath,
                 TargetsCleared = targetsCleared,
-                ShotsRemaining = GameRules.ShotsPerStage - shotInStage,
+                TargetTotal = ActiveTargetsPerStage,
+                ShotsRemaining = ActiveShotsPerStage - shotInStage,
                 Score = score,
                 BonusMode = bonusMode,
-                CanFire = canFire && screen == GameScreen.Playing,
-                Difficulty = difficulty
+                CanFire = canFire && CanAcceptFire(),
+                Difficulty = difficulty,
+                Mode = campaignMode,
+                WeaponName = SelectedWeapon.Name
             };
         }
 
@@ -862,7 +1209,7 @@ namespace BallisticSniper
             impactMarker.name = "Impact Review Marker";
             impactMarker.transform.SetParent(transform, true);
             impactMarker.transform.position = currentShot.Impact + Vector3.back * 0.10f;
-            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.08f, 0.035f, 0.08f);
+            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.18f, 0.09f, 0.18f);
             Renderer renderer = impactMarker.GetComponent<Renderer>();
             renderer.sharedMaterial = world.Materials.Solid(new Color(1f, 0.055f, 0.025f), true, "_ImpactMarker");
             Collider collider = impactMarker.GetComponent<Collider>();
@@ -921,7 +1268,10 @@ namespace BallisticSniper
         private void ResetCameraForBriefing()
         {
             playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
-            playerCamera.transform.rotation = Quaternion.LookRotation(new Vector3(0f, CameraHeight, range) - playerCamera.transform.position, Vector3.up);
+            Vector3 focus = campaignMode == CampaignMode.Operations && world.PrimaryHuman != null
+                ? world.PrimaryHuman.AimCentre
+                : new Vector3(0f, CameraHeight, range);
+            playerCamera.transform.rotation = Quaternion.LookRotation(focus - playerCamera.transform.position, Vector3.up);
             playerCamera.fieldOfView = Mathf.Clamp(18f + stage * 1.4f, 18f, 24f);
         }
 
@@ -947,7 +1297,8 @@ namespace BallisticSniper
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 if (screen == GameScreen.Menu) return;
-                if (screen == GameScreen.Help || screen == GameScreen.Summary) OpenMenu();
+                if (screen == GameScreen.Help) CloseHelp();
+                else if (screen == GameScreen.Briefing || screen == GameScreen.Summary) OpenMenu();
                 else TogglePause();
             }
 
@@ -977,6 +1328,11 @@ namespace BallisticSniper
             activeProjectile = null;
             if (killCam != null && killCam.Active) killCam.StopImmediately();
             RemoveImpactMarker();
+        }
+
+        private string HighScoreKey()
+        {
+            return campaignMode == CampaignMode.Operations ? "high_score_operations" : "high_score_range";
         }
 
         private void OnApplicationPause(bool paused)

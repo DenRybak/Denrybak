@@ -7,15 +7,20 @@ namespace BallisticSniper
     public sealed class RangeWorld : MonoBehaviour
     {
         private readonly List<TargetActor> targets = new List<TargetActor>();
+        private readonly List<HumanMissionActor> humans = new List<HumanMissionActor>();
         private readonly List<GameObject> transientObjects = new List<GameObject>();
         private MaterialLibrary materials;
         private Transform stageRoot;
         private Light sun;
+        private Light skyFill;
         private Material skyboxMaterial;
         private int currentStage;
         private float currentRange;
+        private CampaignMode currentMode;
 
         public IReadOnlyList<TargetActor> Targets => targets;
+        public IReadOnlyList<HumanMissionActor> Humans => humans;
+        public HumanMissionActor PrimaryHuman { get; private set; }
         public TargetActor BonusTarget { get; private set; }
         public MaterialLibrary Materials => materials;
 
@@ -29,16 +34,37 @@ namespace BallisticSniper
 
         public void BuildStage(int stageIndex, Difficulty difficulty)
         {
-            ClearStage();
-            currentStage = Mathf.Clamp(stageIndex, 0, GameRules.StageDefinitions.Length - 1);
-            StageDefinition definition = GameRules.StageDefinitions[currentStage];
-            currentRange = definition.RangeMetres;
+            BuildStage(stageIndex, difficulty, CampaignMode.Range);
+        }
 
-            ConfigureAtmosphere(currentStage);
-            CreateTerrain(currentStage, currentRange);
-            CreateEnvironment(currentStage, currentRange);
-            CreateRangeFurniture(currentStage, currentRange);
-            CreateTargets(definition, difficulty);
+        public void BuildStage(int stageIndex, Difficulty difficulty, CampaignMode mode)
+        {
+            ClearStage();
+            currentMode = mode;
+            if (mode == CampaignMode.Operations)
+            {
+                currentStage = Mathf.Clamp(stageIndex, 0, GameRules.OperationDefinitions.Length - 1);
+                OperationDefinition operation = GameRules.OperationDefinitions[currentStage];
+                currentRange = operation.RangeMetres;
+                int environmentStage = currentStage == 0 ? 1 : currentStage == 1 ? 3 : 4;
+                ConfigureAtmosphere(environmentStage);
+                CreateTerrain(environmentStage, currentRange);
+                CreateEnvironment(environmentStage, currentRange);
+                CreateGroundScatter(environmentStage, currentRange);
+                CreateOperationSetpiece(operation, currentStage);
+            }
+            else
+            {
+                currentStage = Mathf.Clamp(stageIndex, 0, GameRules.StageDefinitions.Length - 1);
+                StageDefinition definition = GameRules.StageDefinitions[currentStage];
+                currentRange = definition.RangeMetres;
+                ConfigureAtmosphere(currentStage);
+                CreateTerrain(currentStage, currentRange);
+                CreateEnvironment(currentStage, currentRange);
+                CreateGroundScatter(currentStage, currentRange);
+                CreateRangeFurniture(currentStage, currentRange);
+                CreateTargets(definition, difficulty);
+            }
         }
 
         public void TickTargets(float clock)
@@ -50,6 +76,10 @@ namespace BallisticSniper
             if (BonusTarget != null && BonusTarget.gameObject.activeSelf)
             {
                 BonusTarget.Tick(clock);
+            }
+            for (int i = 0; i < humans.Count; i++)
+            {
+                humans[i].Tick(clock);
             }
         }
 
@@ -82,6 +112,61 @@ namespace BallisticSniper
                 }
             }
             return best;
+        }
+
+        public HumanMissionActor FindHumanImpact(Vector3 impactPoint, out float normalizedDistance)
+        {
+            HumanMissionActor nearest = null;
+            HumanMissionActor firstPhysicalHit = null;
+            normalizedDistance = float.MaxValue;
+            float closestDepth = float.MaxValue;
+            for (int i = 0; i < humans.Count; i++)
+            {
+                HumanMissionActor actor = humans[i];
+                if (actor == null || actor.IsRagdolled) continue;
+                float distance = actor.NormalizedDistance(impactPoint);
+                if (distance < normalizedDistance)
+                {
+                    normalizedDistance = distance;
+                    nearest = actor;
+                }
+                if (actor.ContainsImpact(impactPoint) && actor.Depth < closestDepth)
+                {
+                    closestDepth = actor.Depth;
+                    firstPhysicalHit = actor;
+                }
+            }
+            return firstPhysicalHit != null ? firstPhysicalHit : nearest;
+        }
+
+        public bool IsOperationImpactBlocked(Vector3 impactPoint)
+        {
+            if (currentMode != CampaignMode.Operations) return false;
+            if (currentStage == 1)
+            {
+                // Only the actual hotel window opening is a valid line of fire.
+                return impactPoint.x < -0.72f || impactPoint.x > 0.72f ||
+                       impactPoint.y < 1.02f || impactPoint.y > 2.10f;
+            }
+            if (currentStage == 2)
+            {
+                // The roof parapet hides the lower body. The ventilation box
+                // adds a second hard obstruction near the right patrol point.
+                if (impactPoint.y < 6.48f) return true;
+                if (impactPoint.x > 0.62f && impactPoint.x < 1.52f && impactPoint.y < 7.42f) return true;
+            }
+            return false;
+        }
+
+        public void ApplyHumanImpact(
+            HumanMissionActor actor,
+            Vector3 impactPoint,
+            Vector3 shotDirection,
+            float impulse)
+        {
+            if (actor == null) return;
+            SpawnHumanImpactParticles(impactPoint, actor.IsPrimary);
+            actor.ActivateRagdoll(impactPoint, shotDirection, impulse);
         }
 
         public void DestroyTargetVisual(TargetActor target, bool explosive)
@@ -134,6 +219,8 @@ namespace BallisticSniper
                 Destroy(child);
             }
             targets.Clear();
+            humans.Clear();
+            PrimaryHuman = null;
             BonusTarget = null;
             transientObjects.Clear();
         }
@@ -148,64 +235,114 @@ namespace BallisticSniper
             sun.shadowStrength = 0.82f;
             sun.shadowBias = 0.045f;
             sun.shadowNormalBias = 0.35f;
-            sun.intensity = 1.15f;
+            sun.intensity = 1.18f;
             RenderSettings.sun = sun;
 
-            Shader skyShader = Shader.Find("Skybox/Procedural");
+            GameObject fillObject = new GameObject("Sky Fill Light");
+            fillObject.transform.SetParent(transform, false);
+            skyFill = fillObject.AddComponent<Light>();
+            skyFill.type = LightType.Directional;
+            skyFill.shadows = LightShadows.None;
+            skyFill.intensity = 0.20f;
+
+            Shader skyShader = Resources.Load<Shader>("BallisticSniper/Shaders/PanoramaSky") ??
+                               Shader.Find("BallisticSniper/PanoramaSky") ??
+                               Resources.Load<Shader>("BallisticSniper/Shaders/GradientSky") ??
+                               Shader.Find("BallisticSniper/GradientSky") ??
+                               Shader.Find("Skybox/Procedural");
             if (skyShader != null)
             {
-                skyboxMaterial = new Material(skyShader) { name = "Runtime Procedural Sky" };
+                skyboxMaterial = new Material(skyShader) { name = "Runtime Cinematic Panorama Sky" };
+                Texture2D panorama = Resources.Load<Texture2D>("BallisticSniper/Textures/range_panorama_v4");
+                if (panorama != null && skyboxMaterial.HasProperty("_PanoramaTex"))
+                    skyboxMaterial.SetTexture("_PanoramaTex", panorama);
                 RenderSettings.skybox = skyboxMaterial;
             }
         }
 
         private void ConfigureAtmosphere(int stage)
         {
-            Color[] skyTints =
+            Color[] zenithColors =
             {
-                new Color(0.58f, 0.56f, 0.49f),
-                new Color(0.45f, 0.59f, 0.62f),
-                new Color(0.69f, 0.50f, 0.36f),
-                new Color(0.43f, 0.50f, 0.52f),
-                new Color(0.52f, 0.65f, 0.78f)
+                new Color(0.055f, 0.14f, 0.30f),
+                new Color(0.045f, 0.17f, 0.21f),
+                new Color(0.075f, 0.15f, 0.28f),
+                new Color(0.035f, 0.08f, 0.14f),
+                new Color(0.075f, 0.18f, 0.36f)
+            };
+            Color[] horizonColors =
+            {
+                new Color(0.34f, 0.44f, 0.52f),
+                new Color(0.28f, 0.40f, 0.38f),
+                new Color(0.46f, 0.30f, 0.18f),
+                new Color(0.20f, 0.27f, 0.30f),
+                new Color(0.40f, 0.49f, 0.58f)
             };
             Color[] fogColors =
             {
-                new Color(0.50f, 0.55f, 0.50f),
-                new Color(0.49f, 0.59f, 0.59f),
-                new Color(0.58f, 0.47f, 0.39f),
-                new Color(0.37f, 0.43f, 0.43f),
-                new Color(0.68f, 0.75f, 0.80f)
+                new Color(0.26f, 0.31f, 0.35f),
+                new Color(0.24f, 0.34f, 0.31f),
+                new Color(0.40f, 0.27f, 0.17f),
+                new Color(0.18f, 0.23f, 0.26f),
+                new Color(0.39f, 0.47f, 0.56f)
             };
             Color[] sunColors =
             {
-                new Color(1.00f, 0.68f, 0.42f),
-                new Color(1.00f, 0.91f, 0.70f),
-                new Color(1.00f, 0.77f, 0.55f),
-                new Color(0.88f, 0.94f, 1.00f),
-                new Color(0.92f, 0.96f, 1.00f)
+                new Color(1.00f, 0.88f, 0.72f),
+                new Color(1.00f, 0.94f, 0.84f),
+                new Color(1.00f, 0.84f, 0.66f),
+                new Color(0.82f, 0.90f, 1.00f),
+                new Color(0.91f, 0.96f, 1.00f)
             };
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = skyTints[stage] * 0.72f;
-            RenderSettings.ambientEquatorColor = fogColors[stage] * 0.62f;
-            RenderSettings.ambientGroundColor = fogColors[stage] * 0.30f;
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.ambientSkyColor = Color.Lerp(zenithColors[stage], horizonColors[stage], 0.42f);
+            RenderSettings.ambientEquatorColor = horizonColors[stage] * 0.56f;
+            RenderSettings.ambientGroundColor = fogColors[stage] * 0.36f;
+            RenderSettings.reflectionIntensity = 0.48f;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = fogColors[stage];
-            RenderSettings.fogStartDistance = currentRange * 0.58f;
-            RenderSettings.fogEndDistance = currentRange + 420f;
+            RenderSettings.fogStartDistance = currentRange * 0.72f;
+            RenderSettings.fogEndDistance = currentRange + 520f;
 
             sun.color = sunColors[stage];
-            sun.intensity = stage == 0 ? 1.35f : 1.08f;
-            sun.transform.rotation = Quaternion.Euler(22f + stage * 5f, -38f + stage * 19f, 0f);
+            sun.intensity = stage == 0 ? 1.18f : 1.12f;
+            float sunYaw = -38f + stage * 19f;
+            sun.transform.rotation = Quaternion.Euler(28f + stage * 4f, sunYaw, 0f);
+            skyFill.color = Color.Lerp(horizonColors[stage], Color.white, 0.12f);
+            skyFill.intensity = stage == 3 ? 0.14f : 0.20f;
+            skyFill.transform.rotation = Quaternion.Euler(48f, sunYaw + 165f, 0f);
 
             if (skyboxMaterial != null)
             {
-                skyboxMaterial.SetColor("_SkyTint", skyTints[stage]);
-                skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.58f);
-                skyboxMaterial.SetFloat("_AtmosphereThickness", stage == 0 ? 1.4f : 0.92f);
-                skyboxMaterial.SetFloat("_SunSize", 0.045f);
+                if (skyboxMaterial.HasProperty("_PanoramaTex"))
+                {
+                    Color tint = Color.Lerp(Color.white, horizonColors[stage], currentMode == CampaignMode.Operations ? 0.10f : 0.06f);
+                    skyboxMaterial.SetColor("_Tint", tint);
+                    skyboxMaterial.SetFloat("_Exposure", stage == 3 ? 0.92f : 1.04f);
+                    skyboxMaterial.SetFloat("_Rotation", stage * 34f + (currentMode == CampaignMode.Operations ? 14f : 0f));
+                    skyboxMaterial.SetFloat("_HorizonBoost", stage == 3 ? 0.04f : 0.10f);
+                }
+                else if (skyboxMaterial.HasProperty("_HorizonColor"))
+                {
+                    skyboxMaterial.SetColor("_HorizonColor", horizonColors[stage]);
+                    skyboxMaterial.SetColor("_ZenithColor", zenithColors[stage]);
+                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    skyboxMaterial.SetColor("_SunColor", sunColors[stage]);
+                    skyboxMaterial.SetVector("_SunDirection", -sun.transform.forward);
+                    skyboxMaterial.SetFloat("_SunIntensity", stage == 2 ? 0.34f : 0.42f);
+                }
+                else
+                {
+                    skyboxMaterial.SetColor("_SkyTint", zenithColors[stage]);
+                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    skyboxMaterial.SetFloat("_AtmosphereThickness", 0.68f);
+                    skyboxMaterial.SetFloat("_SunSize", 0.025f);
+                    skyboxMaterial.SetFloat("_SunSizeConvergence", 5.0f);
+                    skyboxMaterial.SetFloat("_Exposure", 0.82f);
+                }
             }
         }
 
@@ -289,8 +426,8 @@ namespace BallisticSniper
             switch (stage)
             {
                 case 0:
-                    CreateDistantRocks(range, 34, MaterialLibrary.Surface.Granite, new Color(0.74f, 0.70f, 0.62f), 28f, 3f, 12f);
-                    CreateTreeLine(range, 24, false);
+                    CreateDistantRocks(range, 42, MaterialLibrary.Surface.Granite, new Color(0.74f, 0.70f, 0.62f), 40f, 1.4f, 7.5f);
+                    CreateTreeLine(range, 30, false);
                     break;
                 case 1:
                     CreateDistantRocks(range, 42, MaterialLibrary.Surface.Grass, new Color(0.63f, 0.74f, 0.50f), 35f, 5f, 20f);
@@ -308,6 +445,88 @@ namespace BallisticSniper
                     break;
             }
             Random.state = oldState;
+        }
+
+        private void CreateGroundScatter(int stage, float range)
+        {
+            Random.State oldState = Random.state;
+            Random.InitState(8171 + stage * 1301);
+            Material stone = materials.Get(
+                stage == 2 ? MaterialLibrary.Surface.Sandstone : MaterialLibrary.Surface.Granite,
+                stage == 4 ? new Color(0.86f, 0.91f, 0.94f) : new Color(0.62f, 0.59f, 0.52f),
+                0f,
+                0.10f,
+                "_GroundScatter");
+            Material scrub = materials.Get(
+                stage == 4 ? MaterialLibrary.Surface.Snow : MaterialLibrary.Surface.Grass,
+                stage == 2 ? new Color(0.48f, 0.38f, 0.20f) : new Color(0.42f, 0.52f, 0.28f),
+                0f,
+                0.14f,
+                "_GroundScatter");
+
+            int stoneCount = stage == 3 ? 28 : 62;
+            float depth = Mathf.Min(180f, range * 0.72f);
+            for (int i = 0; i < stoneCount; i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                float z = Random.Range(7f, depth);
+                float x = side * Random.Range(6.5f, 72f);
+                float size = Random.Range(0.10f, 0.52f) * Mathf.Lerp(0.75f, 1.35f, z / depth);
+                float groundY = SampleTerrainHeight(stage, range, x, z);
+                GameObject pebble = CreatePrimitive(
+                    PrimitiveType.Sphere,
+                    "Ground Stone",
+                    stageRoot,
+                    new Vector3(x, groundY + size * 0.20f, z),
+                    new Vector3(size * Random.Range(0.7f, 1.45f), size * Random.Range(0.28f, 0.65f), size),
+                    stone,
+                    Random.rotation,
+                    false);
+                Renderer pebbleRenderer = pebble.GetComponent<Renderer>();
+                if (pebbleRenderer != null) pebbleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
+
+            if (stage != 3)
+            {
+                int scrubCount = stage == 4 ? 22 : 38;
+                for (int i = 0; i < scrubCount; i++)
+                {
+                    float side = i % 2 == 0 ? -1f : 1f;
+                    float z = Random.Range(12f, depth);
+                    float x = side * Random.Range(10f, 86f);
+                    float size = Random.Range(0.24f, 0.75f);
+                    float groundY = SampleTerrainHeight(stage, range, x, z);
+                    GameObject tuft = CreatePrimitive(
+                        PrimitiveType.Sphere,
+                        "Range Scrub",
+                        stageRoot,
+                        new Vector3(x, groundY + size * 0.32f, z),
+                        new Vector3(size, size * 0.52f, size * Random.Range(0.70f, 1.25f)),
+                        scrub,
+                        Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                        false);
+                    Renderer tuftRenderer = tuft.GetComponent<Renderer>();
+                    if (tuftRenderer != null) tuftRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                }
+            }
+
+            Random.state = oldState;
+        }
+
+        private static float SampleTerrainHeight(int stage, float range, float worldX, float worldZ)
+        {
+            const float width = 520f;
+            float length = range + 330f;
+            float x01 = Mathf.Clamp01(worldX / width + 0.5f);
+            float z01 = Mathf.Clamp01((worldZ + 24f) / length);
+            float amplitude = stage == 1 ? 15f : stage == 2 ? 22f : stage == 4 ? 18f : 5f;
+            float noise = (Mathf.PerlinNoise(x01 * 7.5f + stage * 2.7f, z01 * 11.5f + stage) - 0.5f) * 2f;
+            float laneFlatten = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((Mathf.Abs(worldX) - 17f) / 90f));
+            float stageShape = stage == 1 || stage == 2 || stage == 4
+                ? Mathf.Pow(Mathf.Clamp01(Mathf.Abs(worldX) / (width * 0.5f)), 1.35f) * amplitude * 1.8f
+                : 0f;
+            float height = noise * amplitude * 0.25f * laneFlatten + stageShape;
+            return stage == 3 ? height * 0.16f : height;
         }
 
         private void CreateDistantRocks(float range, int count, MaterialLibrary.Surface surface, Color tint, float sideOffset, float minScale, float maxScale)
@@ -376,6 +595,131 @@ namespace BallisticSniper
                 CreatePrimitive(PrimitiveType.Cylinder, "Industrial Tank", stageRoot,
                     new Vector3(x + side * 21f, 8f, z + 7f), new Vector3(5f, 8f, 5f), steel, Quaternion.identity, false);
             }
+        }
+
+        private void CreateOperationSetpiece(OperationDefinition operation, int operationStage)
+        {
+            Material concrete = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.72f, 0.75f, 0.73f), 0f, 0.34f, "_OperationArchitecture");
+            Material darkConcrete = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.27f, 0.31f, 0.32f), 0f, 0.25f, "_OperationArchitectureDark");
+            Material steel = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, new Color(0.47f, 0.53f, 0.53f), 0.72f, 0.48f, "_OperationSteel");
+            Material wood = materials.Get(MaterialLibrary.Surface.Planks, new Color(0.82f, 0.65f, 0.43f), 0f, 0.30f, "_OperationWood");
+            Material warm = materials.Solid(new Color(1f, 0.54f, 0.20f), true, "_OperationWarmLight");
+
+            if (operation.Kind == OperationKind.Conversation)
+            {
+                float floorY = 0.30f;
+                CreatePrimitive(PrimitiveType.Cube, "Terrace Floor", stageRoot,
+                    new Vector3(0f, 0.15f, currentRange), new Vector3(12f, 0.30f, 8f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Terrace Back Wall", stageRoot,
+                    new Vector3(0f, 2.30f, currentRange + 3.65f), new Vector3(12f, 4.30f, 0.30f), darkConcrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Canopy", stageRoot,
+                    new Vector3(0f, 3.25f, currentRange + 0.50f), new Vector3(9.2f, 0.20f, 6.1f), wood, Quaternion.identity, true);
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    CreatePrimitive(PrimitiveType.Cylinder, "Canopy Column", stageRoot,
+                        new Vector3(side * 4.10f, 1.75f, currentRange - 1.80f), new Vector3(0.12f, 1.60f, 0.12f), steel, Quaternion.identity, true);
+                    CreatePrimitive(PrimitiveType.Cylinder, "Terrace Lamp", stageRoot,
+                        new Vector3(side * 2.55f, 2.83f, currentRange + 1.90f), new Vector3(0.14f, 0.12f, 0.14f), warm, Quaternion.identity, false);
+                }
+                CreatePrimitive(PrimitiveType.Cylinder, "Conversation Table", stageRoot,
+                    new Vector3(0.02f, 0.91f, currentRange - 0.32f), new Vector3(0.62f, 0.055f, 0.62f), wood, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cylinder, "Table Pedestal", stageRoot,
+                    new Vector3(0.02f, 0.59f, currentRange - 0.32f), new Vector3(0.09f, 0.30f, 0.09f), steel, Quaternion.identity, true);
+
+                AddHuman("VOLKOV", true, new Vector3(-0.22f, floorY, currentRange + 0.05f),
+                    HumanMotionStyle.Conversation, 0.20f, new Color(0.56f, 0.075f, 0.065f), new Color(0.10f, 0.11f, 0.13f));
+                AddHuman("SPEAKER", false, new Vector3(0.24f, floorY, currentRange - 0.34f),
+                    HumanMotionStyle.CrossingSpeaker, 2.10f, new Color(0.12f, 0.28f, 0.46f), new Color(0.13f, 0.16f, 0.20f));
+                AddHuman("SECURITY", false, new Vector3(2.15f, floorY, currentRange + 0.35f),
+                    HumanMotionStyle.Guard, 4.30f, new Color(0.12f, 0.14f, 0.16f), new Color(0.08f, 0.09f, 0.10f));
+            }
+            else if (operation.Kind == OperationKind.HotelWindow)
+            {
+                CreatePrimitive(PrimitiveType.Cube, "Hotel Foundation", stageRoot,
+                    new Vector3(0f, -0.18f, currentRange + 1.1f), new Vector3(12f, 0.35f, 7f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Facade Left", stageRoot,
+                    new Vector3(-3.38f, 2.15f, currentRange), new Vector3(5.30f, 4.30f, 0.36f), darkConcrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Facade Right", stageRoot,
+                    new Vector3(3.38f, 2.15f, currentRange), new Vector3(5.30f, 4.30f, 0.36f), darkConcrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Facade Sill", stageRoot,
+                    new Vector3(0f, 0.50f, currentRange), new Vector3(1.46f, 1.0f, 0.36f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Facade Header", stageRoot,
+                    new Vector3(0f, 3.20f, currentRange), new Vector3(1.46f, 2.20f, 0.36f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Window Frame L", stageRoot,
+                    new Vector3(-0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Window Frame R", stageRoot,
+                    new Vector3(0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Window Glass", stageRoot,
+                    new Vector3(0f, 1.56f, currentRange - 0.10f), new Vector3(1.32f, 1.04f, 0.018f),
+                    materials.TransparentGlass(new Color(0.55f, 0.78f, 0.90f, 0.23f)), Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Room Floor", stageRoot,
+                    new Vector3(0f, -0.08f, currentRange + 2.10f), new Vector3(5.2f, 0.18f, 4f), wood, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Interior Lamp", stageRoot,
+                    new Vector3(-1.7f, 2.42f, currentRange + 1.3f), new Vector3(0.18f, 0.18f, 0.18f), warm, Quaternion.identity, false);
+
+                AddHuman("MOROZOV", true, new Vector3(0f, 0.02f, currentRange + 0.52f),
+                    HumanMotionStyle.WindowPatrol, 0.35f, new Color(0.075f, 0.30f, 0.21f), new Color(0.09f, 0.11f, 0.12f));
+                AddHuman("ROOM ATTENDANT", false, new Vector3(0.12f, 0.02f, currentRange + 0.28f),
+                    HumanMotionStyle.CrossingSpeaker, 3.25f, new Color(0.58f, 0.62f, 0.66f), new Color(0.16f, 0.19f, 0.22f));
+            }
+            else
+            {
+                const float roofY = 5.82f;
+                CreatePrimitive(PrimitiveType.Cube, "Terminal Building", stageRoot,
+                    new Vector3(0f, 2.75f, currentRange + 3.6f), new Vector3(20f, 5.50f, 8.2f), darkConcrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Terminal Roof", stageRoot,
+                    new Vector3(0f, 5.64f, currentRange + 0.45f), new Vector3(20f, 0.36f, 8.0f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Roof Parapet", stageRoot,
+                    new Vector3(0f, 6.14f, currentRange - 0.48f), new Vector3(20f, 0.66f, 0.30f), concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Ventilation Block", stageRoot,
+                    new Vector3(1.07f, 6.58f, currentRange + 0.06f), new Vector3(0.90f, 1.50f, 1.25f), steel, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cylinder, "Roof Antenna", stageRoot,
+                    new Vector3(-4.2f, 8.40f, currentRange + 1.8f), new Vector3(0.11f, 2.65f, 0.11f), steel, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Aviation Light", stageRoot,
+                    new Vector3(-4.2f, 11.05f, currentRange + 1.8f), Vector3.one * 0.22f,
+                    materials.Solid(new Color(1f, 0.08f, 0.035f), true, "_AviationLight"), Quaternion.identity, false);
+
+                AddHuman("ORLOV", true, new Vector3(-0.18f, roofY, currentRange + 0.18f),
+                    HumanMotionStyle.RooftopPatrol, 0.40f, new Color(0.67f, 0.53f, 0.31f), new Color(0.12f, 0.13f, 0.14f));
+                AddHuman("GUARD ALPHA", false, new Vector3(-0.82f, roofY, currentRange - 0.20f),
+                    HumanMotionStyle.Guard, 2.40f, new Color(0.12f, 0.16f, 0.20f), new Color(0.08f, 0.10f, 0.12f));
+                AddHuman("GUARD BRAVO", false, new Vector3(2.08f, roofY, currentRange + 0.25f),
+                    HumanMotionStyle.Guard, 5.10f, new Color(0.17f, 0.19f, 0.21f), new Color(0.08f, 0.10f, 0.12f));
+            }
+
+            GameObject keyObject = new GameObject("Operation Key Light");
+            keyObject.transform.SetParent(stageRoot, false);
+            keyObject.transform.position = new Vector3(-2.2f, operationStage == 2 ? 10f : 5f, currentRange - 3f);
+            Light key = keyObject.AddComponent<Light>();
+            key.type = LightType.Point;
+            key.color = operationStage == 1 ? new Color(1f, 0.70f, 0.42f) : new Color(0.72f, 0.84f, 1f);
+            key.intensity = 2.2f;
+            key.range = 18f;
+            key.shadows = LightShadows.Soft;
+        }
+
+        private void AddHuman(
+            string characterName,
+            bool primary,
+            Vector3 position,
+            HumanMotionStyle motion,
+            float phase,
+            Color jacket,
+            Color trousers)
+        {
+            HumanMissionActor actor = HumanMissionActor.Create(
+                stageRoot,
+                materials,
+                characterName,
+                primary,
+                position,
+                motion,
+                currentStage,
+                phase,
+                jacket,
+                trousers);
+            humans.Add(actor);
+            if (primary) PrimaryHuman = actor;
         }
 
         private void CreateRangeFurniture(int stage, float range)
@@ -486,6 +830,34 @@ namespace BallisticSniper
             particleObject.AddComponent<TimedDestroy>().Lifetime = explosive ? 2.2f : 1.4f;
         }
 
+        private void SpawnHumanImpactParticles(Vector3 position, bool primary)
+        {
+            GameObject particleObject = new GameObject(primary ? "Target Fabric Impact" : "Bystander Fabric Impact");
+            particleObject.transform.SetParent(stageRoot, false);
+            particleObject.transform.position = position;
+            ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = system.main;
+            main.loop = false;
+            main.duration = 0.18f;
+            main.startLifetime = 0.48f;
+            main.startSpeed = 2.6f;
+            main.startSize = 0.045f;
+            main.gravityModifier = 0.38f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startColor = primary ? new Color(0.95f, 0.74f, 0.34f) : new Color(0.55f, 0.76f, 0.92f);
+            ParticleSystem.EmissionModule emission = system.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)22) });
+            ParticleSystem.ShapeModule shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 24f;
+            shape.radius = 0.055f;
+            ParticleSystemRenderer renderer = particleObject.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = materials.Solid(primary ? new Color(1f, 0.62f, 0.18f) : new Color(0.45f, 0.70f, 0.95f), true, "_FabricImpact");
+            system.Play();
+            particleObject.AddComponent<TimedDestroy>().Lifetime = 1.1f;
+        }
+
         private void SpawnExplosionFlash(Vector3 position)
         {
             GameObject flash = CreatePrimitive(PrimitiveType.Sphere, "Explosion Flash", stageRoot, position,
@@ -523,9 +895,24 @@ namespace BallisticSniper
                 renderer.sharedMaterial = material;
                 renderer.shadowCastingMode = ShadowCastingMode.On;
                 renderer.receiveShadows = true;
+                if (material != null && material.HasProperty("_Tiling"))
+                {
+                    float width = Mathf.Max(Mathf.Abs(localScale.x), Mathf.Abs(localScale.z));
+                    float height = Mathf.Max(Mathf.Abs(localScale.y), Mathf.Min(width, 4f));
+                    float repeatX = Mathf.Max(1f, width * (type == PrimitiveType.Cube ? 0.30f : 0.16f));
+                    float repeatY = Mathf.Max(1f, height * (type == PrimitiveType.Cube ? 0.30f : 0.16f));
+                    MaterialPropertyBlock properties = new MaterialPropertyBlock();
+                    properties.SetVector("_Tiling", new Vector4(repeatX, repeatY, 0f, 0f));
+                    renderer.SetPropertyBlock(properties);
+                }
             }
             Collider foundCollider = gameObject.GetComponent<Collider>();
-            if (foundCollider != null) foundCollider.enabled = collider;
+            if (foundCollider == null)
+            {
+                throw new MissingComponentException(
+                    "Primitive collider for " + type + " is unavailable in this Player build.");
+            }
+            foundCollider.enabled = collider;
             return gameObject;
         }
     }
@@ -664,6 +1051,7 @@ namespace BallisticSniper
         {
             visualRoot = new GameObject("Detailed Target Model").transform;
             visualRoot.SetParent(transform, false);
+            BuildReadabilityFrame();
             switch (Kind)
             {
                 case TargetKind.Steel: BuildSteel(); break;
@@ -675,6 +1063,43 @@ namespace BallisticSniper
                 case TargetKind.ExplosiveBarrel: BuildBarrel(); break;
             }
             if (Kind != TargetKind.Steel) BuildPedestal();
+        }
+
+        private void BuildReadabilityFrame()
+        {
+            Vector2 targetSize = GameRules.TargetSize(Kind);
+            float width = Mathf.Max(0.78f, targetSize.x + 0.28f);
+            float height = Mathf.Max(0.88f, targetSize.y + 0.26f);
+            Color accent = Kind == TargetKind.GlassBottle ? new Color(0.10f, 0.88f, 1.00f) :
+                Kind == TargetKind.ClayJug ? new Color(1.00f, 0.49f, 0.12f) :
+                Kind == TargetKind.Cans ? new Color(0.18f, 0.58f, 1.00f) :
+                Kind == TargetKind.WoodenCrate ? new Color(1.00f, 0.76f, 0.18f) :
+                Kind == TargetKind.Watermelon ? new Color(0.25f, 1.00f, 0.30f) :
+                Kind == TargetKind.ExplosiveBarrel ? new Color(1.00f, 0.12f, 0.055f) :
+                new Color(1.00f, 0.94f, 0.78f);
+            Material backdrop = materials.Solid(new Color(0.018f, 0.026f, 0.030f), false, "_TargetBackdrop");
+            Material rim = materials.Solid(accent, true, "_TargetRim" + Kind);
+
+            RangeWorld.CreatePrimitive(PrimitiveType.Cube, "Contrast Backplate", visualRoot,
+                new Vector3(0f, 0f, 0.19f), new Vector3(width, height, 0.055f), backdrop, Quaternion.identity, false);
+            RangeWorld.CreatePrimitive(PrimitiveType.Cube, "Readability Rim Top", visualRoot,
+                new Vector3(0f, height * 0.5f, -0.02f), new Vector3(width + 0.08f, 0.035f, 0.035f), rim, Quaternion.identity, false);
+            RangeWorld.CreatePrimitive(PrimitiveType.Cube, "Readability Rim Bottom", visualRoot,
+                new Vector3(0f, -height * 0.5f, -0.02f), new Vector3(width + 0.08f, 0.035f, 0.035f), rim, Quaternion.identity, false);
+            RangeWorld.CreatePrimitive(PrimitiveType.Cube, "Readability Rim Left", visualRoot,
+                new Vector3(-width * 0.5f, 0f, -0.02f), new Vector3(0.035f, height, 0.035f), rim, Quaternion.identity, false);
+            RangeWorld.CreatePrimitive(PrimitiveType.Cube, "Readability Rim Right", visualRoot,
+                new Vector3(width * 0.5f, 0f, -0.02f), new Vector3(0.035f, height, 0.035f), rim, Quaternion.identity, false);
+
+            GameObject lampObject = new GameObject("Target Accent Light");
+            lampObject.transform.SetParent(visualRoot, false);
+            lampObject.transform.localPosition = new Vector3(0f, height * 0.20f, -0.55f);
+            Light lamp = lampObject.AddComponent<Light>();
+            lamp.type = LightType.Point;
+            lamp.color = accent;
+            lamp.intensity = 0.80f;
+            lamp.range = 2.8f;
+            lamp.shadows = LightShadows.None;
         }
 
         private void BuildPedestal()

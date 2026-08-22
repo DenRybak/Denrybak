@@ -3,7 +3,7 @@ name: Build Unity Android APK
 "on":
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, codex/unity-v3-0-2-menu-fix]
 
 permissions:
   contents: read
@@ -120,7 +120,13 @@ jobs:
           test -x "$ANDROID/SDK/build-tools/34.0.0/aapt2"
           test -f "$ANDROID/SDK/platforms/android-35/android.jar"
 
-      - name: Activate Unity Personal and build APK
+      - name: Preserve the debug signing identity for future updates
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: ballistic-sniper-v32-debug-signing
+
+      - name: Test the real menu-to-scope flow and build APK
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
@@ -142,6 +148,25 @@ jobs:
               --deactivate-all || true
           }
           trap deactivate_license EXIT
+          mkdir -p "$GITHUB_WORKSPACE/TestResults"
+          command -v xvfb-run >/dev/null
+          xvfb-run -a "$UNITY_EDITOR" \
+            -batchmode \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -runTests \
+            -testPlatform EditMode \
+            -testResults "$GITHUB_WORKSPACE/TestResults/editmode-results.xml" \
+            -logFile /dev/stdout
+          xvfb-run -a "$UNITY_EDITOR" \
+            -batchmode \
+            -projectPath "$GITHUB_WORKSPACE" \
+            -runTests \
+            -testPlatform PlayMode \
+            -testResults "$GITHUB_WORKSPACE/TestResults/playmode-results.xml" \
+            -logFile /dev/stdout
+          test -s "$GITHUB_WORKSPACE/TestResults/playmode-results.xml"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-world-v4.0.0.png"
+          test -s "$GITHUB_WORKSPACE/TestResults/runtime-operation-v4.0.0.png"
           "$UNITY_EDITOR" \
             -batchmode \
             -nographics \
@@ -150,12 +175,54 @@ jobs:
             -buildTarget Android \
             -executeMethod BallisticSniper.Editor.ProjectConfigurator.BuildAndroidApk \
             -logFile /dev/stdout
-          test -s Builds/Android/Ballistic-Sniper-Unity-v3.0.1.apk
+          test -s Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
+
+      - name: Enable KVM for the Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install the APK and verify START with a real Android tap
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          cores: 2
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: >-
+            -no-snapshot-load -no-snapshot-save -no-window
+            -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none -camera-front none
+          script: >-
+            bash Tools/verify_android_start.sh
+            Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
+            com.denis.ballisticsniper.unity
+
+      - name: Preserve the Android signature verifier for release signing
+        if: always()
+        run: |
+          cp "$RUNNER_TEMP/unity/Editor/Data/PlaybackEngines/AndroidPlayer/SDK/build-tools/34.0.0/lib/apksigner.jar" \
+            TestResults/apksigner.jar
+          test -s TestResults/apksigner.jar
+
+      - name: Upload runtime smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ballistic-Sniper-Unity-v4.0.0-smoke-test
+          path: TestResults/
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ballistic-Sniper-Unity-v3.0.1-apk
-          path: Builds/Android/Ballistic-Sniper-Unity-v3.0.1.apk
+          name: Ballistic-Sniper-Unity-v4.0.0-apk
+          path: Builds/Android/Ballistic-Sniper-Unity-v4.0.0.apk
           if-no-files-found: error
           retention-days: 7
