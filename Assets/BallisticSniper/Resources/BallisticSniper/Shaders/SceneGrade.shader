@@ -50,6 +50,13 @@ Shader "Hidden/BallisticSniper/SceneGrade"
                 half luminance = dot(colour, half3(0.2126h, 0.7152h, 0.0722h));
                 colour = lerp(luminance.xxx, colour, _Saturation);
 
+                // Android/mobile displays made the grass atlas excessively
+                // green after the clarity pass. Compress final chroma slightly
+                // while retaining texture contrast and the deliberately warm
+                // or cool atmosphere of each stage.
+                luminance = dot(colour, half3(0.2126h, 0.7152h, 0.0722h));
+                colour = lerp(luminance.xxx, colour, 0.85h);
+
                 half2 centred = input.uv * 2.0h - 1.0h;
                 half edge = saturate(dot(centred, centred) * 0.52h);
                 colour *= 1.0h - edge * _Vignette;
