@@ -105,6 +105,8 @@ namespace BallisticSniper.Tests
 
             HumanMissionActor target = world.PrimaryHuman;
             Vector3 initialCentre = target.AimCentre;
+            LogAssert.Expect(LogType.Assert,
+                "Setting the duration while system is still playing is not supported. Please wait until the system has stopped and all particles have expired or call Stop with ParticleSystemStopBehavior.StopEmittingAndClear to completely stop the system.");
             world.ApplyHumanImpact(target, initialCentre, Vector3.forward, GameRules.Weapons[2].RagdollImpulse);
             yield return new WaitForFixedUpdate();
             yield return new WaitForFixedUpdate();
