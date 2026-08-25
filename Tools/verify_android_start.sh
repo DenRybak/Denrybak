@@ -113,15 +113,25 @@ fi
 # bullseye path even at the maximum stage-one crosswind.
 # Pixel 5's landscape cutout consumes 136 px on the left. 12% of the
 # physical display remains inside the safe-area ELEV button both with and
-# without that cutout; the old 8.3% coordinate landed just outside it.
+# without that cutout. SwiftShader can render at only a few frames/second
+# on a cold API-35 emulator, so wait for each tap to be consumed instead of
+# assuming two sub-second taps will both reach Unity.
 elevation_x=$((screen_width * 120 / 1000))
 elevation_plus_y=$((screen_height * 625 / 1000))
-adb shell input tap "$elevation_x" "$elevation_plus_y"
-sleep 0.38
-adb shell input tap "$elevation_x" "$elevation_plus_y"
-sleep 0.38
-adb logcat -d > "$RESULTS_DIR/android-controls-logcat.txt"
-grep -Fq "BALLISTIC_ANDROID_ELEVATION value=1.0" "$RESULTS_DIR/android-controls-logcat.txt"
+adb logcat -c
+elevation_ready=0
+for _tap_try in $(seq 1 6); do
+  adb shell input tap "$elevation_x" "$elevation_plus_y"
+  for _wait_try in $(seq 1 20); do
+    sleep 0.25
+    adb logcat -d > "$RESULTS_DIR/android-controls-logcat.txt"
+    if grep -Fq "BALLISTIC_ANDROID_ELEVATION value=1.0" "$RESULTS_DIR/android-controls-logcat.txt"; then
+      elevation_ready=1
+      break 2
+    fi
+  done
+done
+test "$elevation_ready" -eq 1
 
 fire_x=$((screen_width * 885 / 1000))
 fire_y=$((screen_height * 872 / 1000))
