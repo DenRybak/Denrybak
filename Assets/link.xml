@@ -1,0 +1,12 @@
+<linker>
+  <!-- GameObject.CreatePrimitive adds these native components implicitly. -->
+  <assembly fullname="UnityEngine.PhysicsModule" preserve="all" />
+  <assembly fullname="UnityEngine.CoreModule">
+    <type fullname="UnityEngine.MeshFilter" preserve="all" />
+    <type fullname="UnityEngine.MeshRenderer" preserve="all" />
+    <type fullname="UnityEngine.LineRenderer" preserve="all" />
+    <type fullname="UnityEngine.TrailRenderer" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.ParticleSystemModule" preserve="all" />
+  <assembly fullname="UnityEngine.AudioModule" preserve="all" />
+</linker>

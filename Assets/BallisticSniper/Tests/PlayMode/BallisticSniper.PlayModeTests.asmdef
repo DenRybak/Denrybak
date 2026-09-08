@@ -1,0 +1,19 @@
+{
+  "name": "BallisticSniper.PlayModeTests",
+  "rootNamespace": "BallisticSniper.Tests",
+  "references": [
+    "BallisticSniper.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
