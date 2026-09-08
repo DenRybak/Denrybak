@@ -10,6 +10,14 @@ namespace BallisticSniper.Tests
 {
     public sealed class CampaignLaunchSmokeTests
     {
+        [UnitySetUp]
+        public IEnumerator AllowInputDebounceToSettleBetweenScenarios()
+        {
+            // Each test is a new interaction, not a duplicate tap from the
+            // preceding test. Keep the production button debounce enabled.
+            yield return new WaitForSecondsRealtime(0.5f);
+        }
+
         [UnityTest]
         public IEnumerator AimSurfaceReceivesRaycastsAfterHidingAndRestoringGameplay()
         {
