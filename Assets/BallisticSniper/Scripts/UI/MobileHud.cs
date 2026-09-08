@@ -429,7 +429,10 @@ namespace BallisticSniper
             Stretch(aimSurface.GetComponent<RectTransform>());
             aimSurface.transform.SetAsFirstSibling();
             Image aimImage = aimSurface.GetComponent<Image>();
-            aimImage.color = new Color(0f, 0f, 0f, 0.001f);
+            // Keep a nonzero vertex alpha after Color32 quantization on Android.
+            aimImage.color = new Color(0f, 0f, 0f, 0.01f);
+            aimImage.raycastTarget = true;
+            aimImage.canvasRenderer.cullTransparentMesh = false;
             AimDragSurface drag = aimSurface.GetComponent<AimDragSurface>();
             drag.Dragged = game.DragAim;
 

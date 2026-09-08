@@ -98,6 +98,7 @@ namespace BallisticSniper
         private int variant;
         private bool impactVisible;
         private bool closeUpReported;
+        private int impactHoldFrames;
 
         public bool Active { get; private set; }
         public int Variant => variant;
@@ -121,6 +122,7 @@ namespace BallisticSniper
             Active = true;
             impactVisible = false;
             closeUpReported = false;
+            impactHoldFrames = 0;
 
             bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             bullet.name = "Kill-cam .308 Projectile";
@@ -182,8 +184,9 @@ namespace BallisticSniper
                 impactVisible = true;
             }
 
+            if (t >= 1f) impactHoldFrames++;
             PoseCamera(t, bulletT, bulletPosition, bulletDirection.normalized);
-            if (elapsed >= duration + ImpactHoldSeconds)
+            if (elapsed >= duration + ImpactHoldSeconds && impactHoldFrames >= 6)
             {
                 Finish();
             }
@@ -300,7 +303,7 @@ namespace BallisticSniper
             targetCamera.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up) * Quaternion.AngleAxis(roll, Vector3.forward);
             targetCamera.fieldOfView = fov;
 
-            if (!closeUpReported && progress >= 1f)
+            if (!closeUpReported && progress >= 1f && impactHoldFrames >= 3)
             {
                 closeUpReported = true;
                 Vector3 viewport = targetCamera.WorldToViewportPoint(shot.Impact);

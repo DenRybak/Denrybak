@@ -164,7 +164,7 @@ grep -Eq "fov=17\.0 height=0\.[12][0-9] distance=2\.[56][0-9] viewport=0\.[45][0
   "$RESULTS_DIR/android-shot-logcat.txt"
 
 result_ready=0
-for check_index in $(seq 1 80); do
+for check_index in $(seq 1 300); do
   adb logcat -d > "$RESULTS_DIR/android-shot-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_RESULT_READY screen=Result gameplayVisible=False resultVisible=True acceptedShots=1" \
       "$RESULTS_DIR/android-shot-logcat.txt"; then

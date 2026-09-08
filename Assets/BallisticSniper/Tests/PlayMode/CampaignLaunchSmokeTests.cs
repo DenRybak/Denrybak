@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.EventSystems;
 using System.IO;
 using NUnit.Framework;
 using UnityEngine;
@@ -8,6 +10,42 @@ namespace BallisticSniper.Tests
 {
     public sealed class CampaignLaunchSmokeTests
     {
+        [UnityTest]
+        public IEnumerator AimSurfaceReceivesRaycastsAfterHidingAndRestoringGameplay()
+        {
+            yield return null;
+            BallisticGame game = Object.FindObjectOfType<BallisticGame>();
+            MobileHud hud = Object.FindObjectOfType<MobileHud>();
+            game.OpenMenu();
+            hud.TapStartThroughStandardClickForTests();
+            yield return null;
+            AimDragSurface surface = Object.FindObjectOfType<AimDragSurface>();
+            Assert.That(surface, Is.Not.Null);
+            surface.gameObject.SetActive(false);
+            yield return null;
+            surface.gameObject.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+            PointerEventData pointer = new PointerEventData(EventSystem.current)
+            {
+                position = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f),
+                delta = new Vector2(30f, 10f),
+                button = PointerEventData.InputButton.Left
+            };
+            var hits = new List<RaycastResult>();
+            EventSystem.current.RaycastAll(pointer, hits);
+            Assert.That(hits.Count, Is.GreaterThan(0), "Centre aim surface does not receive touches");
+            Assert.That(hits[0].gameObject.GetComponent<AimDragSurface>(), Is.SameAs(surface),
+                "Another UI element intercepts aiming at the centre");
+            bool received = false;
+            var previousHandler = surface.Dragged;
+            surface.Dragged = delta => { received = delta.sqrMagnitude > 0; previousHandler?.Invoke(delta); };
+            ExecuteEvents.Execute<IDragHandler>(hits[0].gameObject, pointer, ExecuteEvents.dragHandler);
+            surface.Dragged = previousHandler;
+            Assert.That(received, Is.True, "Gesture did not reach the aiming handler");
+            game.OpenMenu();
+        }
+
         [UnityTest]
         public IEnumerator StartButtonEntersTheScopeForEveryDifficultyAndRendersTheRange()
         {
