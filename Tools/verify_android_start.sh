@@ -9,7 +9,7 @@ mkdir -p "$RESULTS_DIR"
 test -s "$APK_PATH"
 adb wait-for-device
 
-for _ in $(seq 1 120); do
+for check_index in $(seq 1 120); do
   if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; then
     break
   fi
@@ -25,7 +25,7 @@ adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 \
   | tee "$RESULTS_DIR/android-launch.txt"
 
 app_pid=""
-for _ in $(seq 1 30); do
+for check_index in $(seq 1 30); do
   # pidof exits with status 1 during the short Activity-start race. Keep the
   # retry loop alive under set -e until Android publishes the process.
   app_pid="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
@@ -37,7 +37,7 @@ done
 test -n "$app_pid"
 
 menu_ready=0
-for _ in $(seq 1 120); do
+for check_index in $(seq 1 120); do
   adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
   adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-startup-app-logcat.txt"
   if grep -Eq "Can't add component because class|ArgumentNullException|NullReferenceException|MissingReferenceException|MissingComponentException|FATAL EXCEPTION" \
@@ -53,7 +53,7 @@ for _ in $(seq 1 120); do
   # thread starts on a cold API-35 emulator. A clean Activity restart is
   # deterministic and keeps this check focused on the APK rather than a
   # transient emulator graphics stall.
-  if [ "$_" = "40" ] || [ "$_" = "80" ]; then
+  if [ "$check_index" = "40" ] || [ "$check_index" = "80" ]; then
     adb shell am force-stop "$PACKAGE_NAME"
     adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 >/dev/null
     for _pid_try in $(seq 1 15); do
@@ -86,7 +86,7 @@ adb logcat -c
 adb shell input tap "$tap_x" "$tap_y"
 
 started=0
-for _ in $(seq 1 60); do
+for check_index in $(seq 1 60); do
   adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True" \
       "$RESULTS_DIR/android-logcat.txt"; then
@@ -139,7 +139,7 @@ adb logcat -c
 adb shell input tap "$fire_x" "$fire_y"
 
 fire_accepted=0
-for _ in $(seq 1 80); do
+for check_index in $(seq 1 80); do
   adb logcat -d > "$RESULTS_DIR/android-shot-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_FIRE_ACCEPTED shot=1" "$RESULTS_DIR/android-shot-logcat.txt"; then
     fire_accepted=1
@@ -150,7 +150,7 @@ done
 test "$fire_accepted" -eq 1
 
 impact_closeup=0
-for _ in $(seq 1 120); do
+for check_index in $(seq 1 120); do
   adb logcat -d > "$RESULTS_DIR/android-shot-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_IMPACT_CLOSEUP" "$RESULTS_DIR/android-shot-logcat.txt"; then
     impact_closeup=1
@@ -164,7 +164,7 @@ grep -Eq "fov=17\.0 height=0\.[12][0-9] distance=2\.[56][0-9] viewport=0\.[45][0
   "$RESULTS_DIR/android-shot-logcat.txt"
 
 result_ready=0
-for _ in $(seq 1 80); do
+for check_index in $(seq 1 80); do
   adb logcat -d > "$RESULTS_DIR/android-shot-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_RESULT_READY screen=Result gameplayVisible=False resultVisible=True acceptedShots=1" \
       "$RESULTS_DIR/android-shot-logcat.txt"; then
@@ -184,7 +184,7 @@ adb logcat -c
 adb shell input tap "$result_x" "$result_y"
 
 returned=0
-for _ in $(seq 1 60); do
+for check_index in $(seq 1 60); do
   adb logcat -d > "$RESULTS_DIR/android-return-logcat.txt"
   if grep -Fq "BALLISTIC_ANDROID_RETURN_TO_TARGETS screen=Playing fireLocked=True gameplayVisible=True scopeVisible=True" \
       "$RESULTS_DIR/android-return-logcat.txt"; then
@@ -205,10 +205,25 @@ aim_x0=$((screen_width * 500 / 1000))
 aim_y0=$((screen_height * 500 / 1000))
 aim_x1=$((screen_width * 560 / 1000))
 aim_y1=$((screen_height * 450 / 1000))
-adb shell input swipe "$aim_x0" "$aim_y0" "$aim_x1" "$aim_y1" 260
-sleep 0.65
-adb logcat -d > "$RESULTS_DIR/android-return-logcat.txt"
-grep -Fq "BALLISTIC_ANDROID_AIM_READY screen=Playing acceptedShots=1" "$RESULTS_DIR/android-return-logcat.txt"
+aim_ready=0
+for aim_attempt in $(seq 1 3); do
+  # Keep the gesture alive across slow emulator frames, and wait for the
+  # application to acknowledge it. Never infer success from elapsed time.
+  adb shell input swipe "$aim_x0" "$aim_y0" "$aim_x1" "$aim_y1" 1500
+  for aim_wait in $(seq 1 40); do
+    adb logcat -d > "$RESULTS_DIR/android-return-logcat.txt"
+    if grep -Fq "BALLISTIC_ANDROID_FIRE_ACCEPTED" "$RESULTS_DIR/android-return-logcat.txt"; then
+      echo "A shot fired during the return-to-aim gesture" >&2
+      exit 1
+    fi
+    if grep -Fq "BALLISTIC_ANDROID_AIM_READY screen=Playing acceptedShots=1" "$RESULTS_DIR/android-return-logcat.txt"; then
+      aim_ready=1
+      break 2
+    fi
+    sleep 0.25
+  done
+done
+test "$aim_ready" -eq 1
 if grep -Fq "BALLISTIC_ANDROID_FIRE_ACCEPTED" "$RESULTS_DIR/android-return-logcat.txt"; then
   echo "A shot fired before the player deliberately pressed FIRE" >&2
   exit 1

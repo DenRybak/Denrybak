@@ -93,6 +93,7 @@ namespace BallisticSniper
         private Action completed;
         private float elapsed;
         private float duration;
+        private const float ImpactHoldSeconds = 2.0f;
         private float originalNearClip;
         private int variant;
         private bool impactVisible;
@@ -182,7 +183,7 @@ namespace BallisticSniper
             }
 
             PoseCamera(t, bulletT, bulletPosition, bulletDirection.normalized);
-            if (t >= 1f)
+            if (elapsed >= duration + ImpactHoldSeconds)
             {
                 Finish();
             }
@@ -286,7 +287,7 @@ namespace BallisticSniper
             // near the target plane, from the shooter's side, with a tight
             // lens and enough hold time to inspect the exact hit location.
             CalculateImpactCloseUp(shot, variant, out Vector3 impactPosition, out Vector3 impactLookAt, out float impactFov);
-            float impactBlend = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.67f, 0.87f, progress));
+            float impactBlend = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 0.75f, progress));
             cameraPosition = Vector3.Lerp(cameraPosition, impactPosition, impactBlend);
             lookAt = Vector3.Lerp(lookAt, impactLookAt, impactBlend);
             fov = Mathf.Lerp(fov, impactFov, impactBlend);
@@ -299,7 +300,7 @@ namespace BallisticSniper
             targetCamera.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up) * Quaternion.AngleAxis(roll, Vector3.forward);
             targetCamera.fieldOfView = fov;
 
-            if (!closeUpReported && progress >= 0.84f)
+            if (!closeUpReported && progress >= 1f)
             {
                 closeUpReported = true;
                 Vector3 viewport = targetCamera.WorldToViewportPoint(shot.Impact);
