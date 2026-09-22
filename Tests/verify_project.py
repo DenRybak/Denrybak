@@ -279,7 +279,7 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.3.0-unity"',
+        'PlayerSettings.bundleVersion = "5.4.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
         '"Ballistic-Sniper-Unity-v5.4.0.apk"',
         "PlayerSettings.Android.bundleVersionCode = 15",
@@ -314,8 +314,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.3.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.3.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.4.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
