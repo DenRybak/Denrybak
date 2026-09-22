@@ -132,7 +132,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.4.0  •  Миссии + тренировка',
+        '"v5.4.1  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
