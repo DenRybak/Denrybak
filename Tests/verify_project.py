@@ -128,7 +128,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.0.0  •  Миссии + тренировка',
+        '"v5.1.0  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -203,7 +203,7 @@ def main() -> int:
         "BallisticSniper/Shaders/PanoramaSky",
         "BallisticSniper/Shaders/GradientSky",
         "missionSkyboxMaterial",
-        "RenderSettings.ambientIntensity = 1.0f",
+        "RenderSettings.ambientIntensity = 0.76f",
         "MaterialPropertyBlock",
         "CreateOperationSetpiece",
         "HumanMotionStyle.TargetPatrol",
@@ -211,13 +211,22 @@ def main() -> int:
         "ApplyHumanImpact",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
-    grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.08f', '"_Sharpness", 0.42f')
+    grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.02f', '"_Sharpness", 0.08f')
     tone_mapper = require("Assets/BallisticSniper/Scripts/Runtime/SceneToneMapper.cs").read_text(encoding="utf-8")
     if (any(token not in rendering for token in render_tokens) or
             any(token not in atlas_shader for token in shader_tokens) or
             grade_tokens[0] not in grade_shader or
             grade_tokens[1] not in tone_mapper or grade_tokens[2] not in tone_mapper):
         raise AssertionError("lighting, texture relief, or material tiling upgrade is missing")
+
+    projectile = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
+    polish_tokens = (
+        "trail.startWidth = 0.018f",
+        "impactHighlight.transform.localScale = Vector3.one * 0.040f",
+        "fieldOfView = 24f",
+    )
+    if any(token not in projectile for token in polish_tokens):
+        raise AssertionError("v5.1 restrained bullet-cam polish is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -248,10 +257,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.0.0-unity"',
+        'PlayerSettings.bundleVersion = "5.1.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.0.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 11",
+        '"Ballistic-Sniper-Unity-v5.1.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 12",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -282,8 +291,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.0.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.0.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.1.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.1.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
