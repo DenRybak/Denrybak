@@ -54,6 +54,8 @@ namespace BallisticSniper
         private float phase;
         private int operationStage;
         private bool ragdolled;
+        private float facingYaw;
+        private float lastTickClock;
 
         private Transform chest;
         private Transform pelvis;
@@ -172,8 +174,26 @@ namespace BallisticSniper
                     break;
             }
 
+            float targetYaw = yaw;
+            bool walking =
+                motion == HumanMotionStyle.TargetPatrol ||
+                motion == HumanMotionStyle.CivilianWalk ||
+                motion == HumanMotionStyle.WindowPatrol ||
+                motion == HumanMotionStyle.CrossingSpeaker ||
+                motion == HumanMotionStyle.RooftopPatrol;
+            if (walking && Mathf.Abs(travel) > 0.045f)
+            {
+                float walkFacing = travel >= 0f ? 68f : -68f;
+                targetYaw = Mathf.Lerp(yaw, walkFacing, 0.82f);
+            }
+
+            float tickDelta = Mathf.Clamp(clock - lastTickClock, 0f, 0.08f);
+            lastTickClock = clock;
+            float turnBlend = 1f - Mathf.Exp(-tickDelta * 7.5f);
+            facingYaw = Mathf.LerpAngle(facingYaw, targetYaw, turnBlend);
+
             transform.position = position;
-            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
             AnimatePose(clock, gesture, travel);
         }
 
@@ -254,39 +274,98 @@ namespace BallisticSniper
 
         private void AnimatePose(float clock, float gesture, float travel)
         {
-            float walkStrength = motion == HumanMotionStyle.Static || motion == HumanMotionStyle.Guard ? 0.18f : 1f;
-            float stride = Mathf.Sin(clock * 4.15f + phase) * 24f * walkStrength * Mathf.Clamp01(Mathf.Abs(travel) + 0.18f);
+            bool walking =
+                motion == HumanMotionStyle.TargetPatrol ||
+                motion == HumanMotionStyle.CivilianWalk ||
+                motion == HumanMotionStyle.WindowPatrol ||
+                motion == HumanMotionStyle.CrossingSpeaker ||
+                motion == HumanMotionStyle.RooftopPatrol;
+
+            float moveAmount = walking
+                ? Mathf.Clamp01(Mathf.Abs(travel) * 0.95f + 0.28f)
+                : motion == HumanMotionStyle.Guard ? 0.16f : 0.08f;
+            float cadence = walking ? 5.35f : 2.4f;
+            float cycle = clock * cadence + phase;
+            float step = Mathf.Sin(cycle);
+            float oppositeStep = Mathf.Sin(cycle + Mathf.PI);
+            float footLiftL = Mathf.Max(0f, Mathf.Sin(cycle + Mathf.PI * 0.12f)) * moveAmount;
+            float footLiftR = Mathf.Max(0f, Mathf.Sin(cycle + Mathf.PI + Mathf.PI * 0.12f)) * moveAmount;
+            float stride = step * 34f * moveAmount;
+            float bob = Mathf.Abs(Mathf.Sin(cycle)) * 0.038f * moveAmount;
+            float hipSway = Mathf.Sin(cycle * 0.5f) * 0.020f * moveAmount;
             float talk = motion == HumanMotionStyle.Conversation || motion == HumanMotionStyle.CrossingSpeaker
                 ? gesture
-                : gesture * 0.12f;
+                : gesture * 0.10f;
+
+            if (pelvis != null)
+            {
+                pelvis.localPosition = new Vector3(hipSway, 0.90f + bob, 0f);
+                pelvis.localRotation = Quaternion.Euler(0f, 0f, -step * 2.8f * moveAmount);
+            }
 
             if (chest != null)
             {
-                chest.localRotation = Quaternion.Euler(gesture * 1.2f, talk * 2.2f, -travel * 1.4f);
-                Vector3 p = chest.localPosition;
-                p.y = 1.29f + Mathf.Sin(clock * 1.65f + phase) * 0.008f;
-                chest.localPosition = p;
+                chest.localPosition = new Vector3(-hipSway * 0.45f, 1.29f + bob, 0f);
+                chest.localRotation = Quaternion.Euler(
+                    -Mathf.Abs(step) * 1.6f * moveAmount + gesture * 0.8f,
+                    talk * 3.5f,
+                    step * 2.2f * moveAmount);
             }
 
             if (head != null)
-                head.localRotation = Quaternion.Euler(-gesture * 1.6f, talk * 7f + travel * 2f, 0f);
+            {
+                head.localPosition = new Vector3(0f, 1.76f + bob * 0.72f, -0.01f);
+                head.localRotation = Quaternion.Euler(
+                    -gesture * 1.1f + Mathf.Abs(step) * 0.7f * moveAmount,
+                    talk * 8f - step * 1.8f * moveAmount,
+                    -step * 0.8f * moveAmount);
+            }
 
-            if (leftUpperArm != null)
-                leftUpperArm.localRotation = Quaternion.Euler(stride * 0.72f, 0f, -8f - talk * 18f);
-            if (rightUpperArm != null)
-                rightUpperArm.localRotation = Quaternion.Euler(-stride * 0.72f, 0f, 8f + talk * 22f);
-            if (leftForearm != null)
-                leftForearm.localRotation = Quaternion.Euler(Mathf.Max(0f, -stride) * 0.28f, 0f, -4f - Mathf.Max(0f, talk) * 24f);
-            if (rightForearm != null)
-                rightForearm.localRotation = Quaternion.Euler(Mathf.Max(0f, stride) * 0.28f, 0f, 4f + Mathf.Max(0f, -talk) * 24f);
-            if (leftThigh != null)
-                leftThigh.localRotation = Quaternion.Euler(-stride, 0f, -1.5f);
-            if (rightThigh != null)
-                rightThigh.localRotation = Quaternion.Euler(stride, 0f, 1.5f);
+            float shoulderY = 1.46f + bob;
+            Quaternion leftArmRot = Quaternion.Euler(stride * 0.78f, 0f, -8f - talk * 15f);
+            Quaternion rightArmRot = Quaternion.Euler(-stride * 0.78f, 0f, 8f + talk * 18f);
+            SetSegmentFromAnchor(leftUpperArm, new Vector3(-0.30f, shoulderY, 0f), leftArmRot, 0.48f);
+            SetSegmentFromAnchor(rightUpperArm, new Vector3(0.30f, shoulderY, 0f), rightArmRot, 0.48f);
+
+            Vector3 leftElbow = new Vector3(-0.30f, shoulderY, 0f) + leftArmRot * Vector3.down * 0.48f;
+            Vector3 rightElbow = new Vector3(0.30f, shoulderY, 0f) + rightArmRot * Vector3.down * 0.48f;
+            Quaternion leftForearmRot = leftArmRot * Quaternion.Euler(
+                12f + Mathf.Max(0f, -stride) * 0.36f + Mathf.Max(0f, talk) * 18f, 0f, 0f);
+            Quaternion rightForearmRot = rightArmRot * Quaternion.Euler(
+                12f + Mathf.Max(0f, stride) * 0.36f + Mathf.Max(0f, -talk) * 18f, 0f, 0f);
+            SetSegmentFromAnchor(leftForearm, leftElbow, leftForearmRot, 0.42f);
+            SetSegmentFromAnchor(rightForearm, rightElbow, rightForearmRot, 0.42f);
+
+            float hipY = 0.79f + bob;
+            Quaternion leftThighRot = Quaternion.Euler(-stride, 0f, -1.5f + step * 2.0f * moveAmount);
+            Quaternion rightThighRot = Quaternion.Euler(stride, 0f, 1.5f - step * 2.0f * moveAmount);
+            SetSegmentFromAnchor(leftThigh, new Vector3(-0.14f + hipSway, hipY, 0f), leftThighRot, 0.54f);
+            SetSegmentFromAnchor(rightThigh, new Vector3(0.14f + hipSway, hipY, 0f), rightThighRot, 0.54f);
+
+            Vector3 leftKnee = new Vector3(-0.14f + hipSway, hipY, 0f) + leftThighRot * Vector3.down * 0.54f;
+            Vector3 rightKnee = new Vector3(0.14f + hipSway, hipY, 0f) + rightThighRot * Vector3.down * 0.54f;
+            Quaternion leftCalfRot = leftThighRot * Quaternion.Euler(footLiftL * 30f, 0f, 0f);
+            Quaternion rightCalfRot = rightThighRot * Quaternion.Euler(footLiftR * 30f, 0f, 0f);
+            SetSegmentFromAnchor(leftCalf, leftKnee, leftCalfRot, 0.46f);
+            SetSegmentFromAnchor(rightCalf, rightKnee, rightCalfRot, 0.46f);
+
+            // Small fore/aft offsets make feet alternately plant and lift,
+            // breaking the old "mannequin on wheels" silhouette.
             if (leftCalf != null)
-                leftCalf.localRotation = Quaternion.Euler(Mathf.Max(0f, stride) * 0.52f, 0f, 0f);
+                leftCalf.localPosition += new Vector3(0f, footLiftL * 0.025f, -oppositeStep * 0.030f * moveAmount);
             if (rightCalf != null)
-                rightCalf.localRotation = Quaternion.Euler(Mathf.Max(0f, -stride) * 0.52f, 0f, 0f);
+                rightCalf.localPosition += new Vector3(0f, footLiftR * 0.025f, step * 0.030f * moveAmount);
+        }
+
+        private static void SetSegmentFromAnchor(
+            Transform segment,
+            Vector3 anchor,
+            Quaternion rotation,
+            float length)
+        {
+            if (segment == null) return;
+            segment.localRotation = rotation;
+            segment.localPosition = anchor + rotation * Vector3.down * (length * 0.5f);
         }
 
         private void BuildRig(MaterialLibrary materials, Color jacketColor, Color trouserColor, bool primary)
@@ -297,9 +376,17 @@ namespace BallisticSniper
                 new Color(0.83f, 0.63f, 0.48f),
                 0.38f + skinShift * 0.50f);
             Material skin = materials.Solid(skinColor, false, "_SkinV5");
-            Material jacket = materials.Get(MaterialLibrary.Surface.Planks, jacketColor, 0f, 0.42f, "_ClothV5");
-            Material trousers = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, trouserColor, 0f, 0.36f, "_TrousersV5");
-            Material shirt = materials.Solid(primary ? new Color(0.88f, 0.88f, 0.80f) : new Color(0.52f, 0.64f, 0.68f), false, "_ShirtV5");
+            Color readableJacket = primary
+                ? Color.Lerp(jacketColor, new Color(0.86f, 0.18f, 0.12f), 0.42f)
+                : Color.Lerp(jacketColor, new Color(0.28f, 0.42f, 0.58f), 0.14f);
+            readableJacket = new Color(
+                Mathf.Clamp01(readableJacket.r * 1.24f + 0.035f),
+                Mathf.Clamp01(readableJacket.g * 1.18f + 0.025f),
+                Mathf.Clamp01(readableJacket.b * 1.18f + 0.025f));
+            Color readableTrousers = Color.Lerp(trouserColor, new Color(0.055f, 0.070f, 0.090f), 0.32f);
+            Material jacket = materials.Get(MaterialLibrary.Surface.Planks, readableJacket, 0f, 0.28f, "_ClothV52");
+            Material trousers = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, readableTrousers, 0f, 0.24f, "_TrousersV52");
+            Material shirt = materials.Solid(primary ? new Color(0.98f, 0.94f, 0.82f) : new Color(0.50f, 0.63f, 0.70f), false, "_ShirtV52");
             Material leather = materials.Solid(new Color(0.045f, 0.040f, 0.035f), false, "_LeatherV5");
             Material hairMaterial = materials.Solid(
                 Color.Lerp(new Color(0.04f, 0.03f, 0.025f), new Color(0.26f, 0.14f, 0.07f), skinShift),
