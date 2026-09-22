@@ -164,8 +164,10 @@ namespace BallisticSniper
             float impulse)
         {
             if (actor == null) return;
-            SpawnHumanImpactParticles(impactPoint, actor.IsPrimary);
-            actor.ActivateRagdoll(impactPoint, shotDirection, impulse);
+            Vector3 direction = shotDirection.sqrMagnitude > 0.0001f ? shotDirection.normalized : Vector3.forward;
+            SpawnHumanImpactParticles(impactPoint, actor.IsPrimary, direction);
+            SpawnHumanBloodMist(impactPoint, direction, actor.IsPrimary);
+            actor.ActivateRagdoll(impactPoint, direction, impulse);
         }
 
         public void DestroyTargetVisual(TargetActor target, bool explosive)
@@ -992,32 +994,116 @@ namespace BallisticSniper
             particleObject.AddComponent<TimedDestroy>().Lifetime = explosive ? 2.2f : 1.4f;
         }
 
-        private void SpawnHumanImpactParticles(Vector3 position, bool primary)
+        private void SpawnHumanImpactParticles(Vector3 position, bool primary, Vector3 shotDirection)
         {
-            GameObject particleObject = new GameObject(primary ? "Target Fabric Impact" : "Bystander Fabric Impact");
+            GameObject particleObject = new GameObject(primary ? "Target Impact Dust" : "Bystander Impact Dust");
             particleObject.transform.SetParent(stageRoot, false);
             particleObject.transform.position = position;
+            if (shotDirection.sqrMagnitude > 0.001f)
+                particleObject.transform.rotation = Quaternion.LookRotation(shotDirection.normalized, Vector3.up);
+
             ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
             ParticleSystem.MainModule main = system.main;
             main.loop = false;
-            main.duration = 0.18f;
-            main.startLifetime = 0.34f;
-            main.startSpeed = 1.9f;
-            main.startSize = 0.018f;
-            main.gravityModifier = 0.38f;
+            main.duration = 0.16f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.28f, 0.58f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.55f, 2.15f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.010f, 0.030f);
+            main.gravityModifier = 0.24f;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.startColor = primary ? new Color(0.95f, 0.74f, 0.34f) : new Color(0.55f, 0.76f, 0.92f);
+            main.startColor = primary
+                ? new Color(0.68f, 0.62f, 0.52f, 0.72f)
+                : new Color(0.58f, 0.61f, 0.62f, 0.64f);
+
             ParticleSystem.EmissionModule emission = system.emission;
             emission.rateOverTime = 0f;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)8) });
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)10, (short)15) });
+
             ParticleSystem.ShapeModule shape = system.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 14f;
-            shape.radius = 0.020f;
+            shape.angle = 20f;
+            shape.radius = 0.018f;
+            shape.length = 0.05f;
+
+            ParticleSystem.ColorOverLifetimeModule colour = system.colorOverLifetime;
+            colour.enabled = true;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(0.76f, 0.69f, 0.57f), 0f),
+                    new GradientColorKey(new Color(0.38f, 0.35f, 0.31f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.72f, 0f),
+                    new GradientAlphaKey(0.34f, 0.46f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            colour.color = gradient;
+
             ParticleSystemRenderer renderer = particleObject.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = materials.Solid(primary ? new Color(0.92f, 0.69f, 0.36f) : new Color(0.48f, 0.66f, 0.82f), false, "_FabricImpact");
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.sharedMaterial = materials.Solid(new Color(0.66f, 0.60f, 0.50f), false, "_ImpactDustV53");
             system.Play();
-            particleObject.AddComponent<TimedDestroy>().Lifetime = 1.1f;
+            particleObject.AddComponent<TimedDestroy>().Lifetime = 1.4f;
+        }
+
+        private void SpawnHumanBloodMist(Vector3 position, Vector3 shotDirection, bool primary)
+        {
+            GameObject particleObject = new GameObject(primary ? "Target Blood Mist" : "Bystander Blood Mist");
+            particleObject.transform.SetParent(stageRoot, false);
+            particleObject.transform.position = position + shotDirection.normalized * 0.025f;
+            if (shotDirection.sqrMagnitude > 0.001f)
+                particleObject.transform.rotation = Quaternion.LookRotation(shotDirection.normalized, Vector3.up);
+
+            ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
+            ParticleSystem.MainModule main = system.main;
+            main.loop = false;
+            main.duration = 0.12f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.52f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.45f, 2.7f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.008f, 0.024f);
+            main.gravityModifier = 0.42f;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(0.34f, 0.015f, 0.012f, 0.90f),
+                new Color(0.62f, 0.025f, 0.018f, 0.82f));
+
+            ParticleSystem.EmissionModule emission = system.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, (short)8, (short)14) });
+
+            ParticleSystem.ShapeModule shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 13f;
+            shape.radius = 0.012f;
+            shape.length = 0.08f;
+
+            ParticleSystem.ColorOverLifetimeModule colour = system.colorOverLifetime;
+            colour.enabled = true;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(0.50f, 0.018f, 0.012f), 0f),
+                    new GradientColorKey(new Color(0.18f, 0.008f, 0.006f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.88f, 0f),
+                    new GradientAlphaKey(0.42f, 0.50f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            colour.color = gradient;
+
+            ParticleSystemRenderer renderer = particleObject.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.lengthScale = 1.6f;
+            renderer.velocityScale = 0.12f;
+            renderer.sharedMaterial = materials.Solid(new Color(0.48f, 0.018f, 0.012f), false, "_BloodMistV53");
+            system.Play();
+            particleObject.AddComponent<TimedDestroy>().Lifetime = 1.3f;
         }
 
         private void SpawnExplosionFlash(Vector3 position)
