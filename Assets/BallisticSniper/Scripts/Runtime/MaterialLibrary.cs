@@ -102,6 +102,30 @@ namespace BallisticSniper
             return material;
         }
 
+        public Material MetallicSolid(
+            Color color,
+            float metallic = 0.78f,
+            float smoothness = 0.82f,
+            string suffix = "")
+        {
+            string key = "metallic_solid|" + ColorUtility.ToHtmlStringRGBA(color) + "|" +
+                         metallic.ToString("0.00") + "|" + smoothness.ToString("0.00") + "|" + suffix;
+            if (materials.TryGetValue(key, out Material cached))
+            {
+                return cached;
+            }
+
+            Material material = new Material(litShader) { name = "MAT_MetallicSolid" + suffix };
+            ApplyColor(material, color);
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
+            if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
+            if (material.HasProperty("_NormalStrength")) material.SetFloat("_NormalStrength", 0f);
+            material.enableInstancing = true;
+            materials[key] = material;
+            return material;
+        }
+
         public Material TransparentGlass(Color tint)
         {
             const string key = "transparent_glass";
