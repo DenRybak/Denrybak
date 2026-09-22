@@ -237,18 +237,18 @@ def main() -> int:
     polish_tokens = (
         "ProjectileVisualFactory",
         'name = "V54 Realistic Rifle Projectile"',
-        "trail.startWidth = 0.00225f",
-        "trail.endWidth = 0.000030f",
-        "trail.time = 0.145f",
-        "trail.minVertexDistance = 0.0038f",
-        "trail.numCornerVertices = 14",
-        "trail.numCapVertices = 12",
+        "trail.widthMultiplier = 0.00085f",
+        "trail.time = 0.165f",
+        "trail.minVertexDistance = 0.0030f",
+        "trail.numCornerVertices = 16",
+        "trail.numCapVertices = 14",
         "trail.colorGradient = killGradient",
+        "trail.receiveShadows = false",
         "impactHighlight.transform.localScale = Vector3.one * 0.012f",
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.4 realistic bullet/tracer polish is missing")
+        raise AssertionError("v5.4.1 thin tracer hotfix is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -279,10 +279,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.4.0-unity"',
+        'PlayerSettings.bundleVersion = "5.4.1-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.4.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 15",
+        '"Ballistic-Sniper-Unity-v5.4.1.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 16",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -305,17 +305,22 @@ def main() -> int:
     material_library = require(
         "Assets/BallisticSniper/Scripts/Runtime/MaterialLibrary.cs"
     ).read_text(encoding="utf-8")
+    tracer_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/TracerTrail.shader").read_text(encoding="utf-8")
     if ('Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit")' not in material_library or
+            'Resources.Load<Shader>("BallisticSniper/Shaders/TracerTrail")' not in material_library or
+            "public Material Tracer(" not in material_library or
             "unlitShader = litShader" not in material_library or
-            "public Material MetallicSolid(" not in material_library):
+            "public Material MetallicSolid(" not in material_library or
+            'Blend SrcAlpha OneMinusSrcAlpha' not in tracer_shader or
+            'ZWrite Off' not in tracer_shader):
         raise AssertionError("runtime materials still depend on a strippable built-in shader")
 
     android_test = require("Tools/verify_android_start.sh").read_text(encoding="utf-8")
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.4.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.4.1 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.1 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
