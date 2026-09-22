@@ -7,7 +7,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.0.0";
+        public const string GameVersion = "5.1.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -614,8 +614,10 @@ namespace BallisticSniper
             cameraObject.transform.SetParent(transform, false);
             playerCamera = cameraObject.GetComponent<Camera>();
             playerCamera.clearFlags = CameraClearFlags.Skybox;
-            playerCamera.nearClipPlane = 0.03f;
-            playerCamera.farClipPlane = 1800f;
+            playerCamera.nearClipPlane = 0.08f;
+            playerCamera.farClipPlane = 1400f;
+            QualitySettings.antiAliasing = 4;
+            QualitySettings.anisotropicFiltering = AnisotropicFiltering.Enable;
             playerCamera.allowHDR = true;
             playerCamera.allowMSAA = true;
             playerCamera.depthTextureMode = DepthTextureMode.Depth;
@@ -1109,7 +1111,7 @@ namespace BallisticSniper
             previousCinematicVariant = variant;
             screen = GameScreen.Cinematic;
             holdingBreath = false;
-            Time.timeScale = campaignMode == CampaignMode.Operations ? 0.28f : 0.42f;
+            Time.timeScale = campaignMode == CampaignMode.Operations ? 0.52f : 0.64f;
             hud.ShowCinematic(variant, SelectedWeapon);
             killCam.Begin(currentShot, variant, OnKillCamComplete);
         }
@@ -1260,9 +1262,9 @@ namespace BallisticSniper
             impactMarker.name = "Impact Review Marker";
             impactMarker.transform.SetParent(transform, true);
             impactMarker.transform.position = currentShot.Impact + Vector3.back * 0.10f;
-            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.18f, 0.09f, 0.18f);
+            impactMarker.transform.localScale = Vector3.one * Mathf.Clamp(range / 900f * 0.050f, 0.028f, 0.050f);
             Renderer renderer = impactMarker.GetComponent<Renderer>();
-            renderer.sharedMaterial = world.Materials.Solid(new Color(1f, 0.055f, 0.025f), true, "_ImpactMarker");
+            renderer.sharedMaterial = world.Materials.Solid(new Color(0.92f, 0.16f, 0.06f), false, "_ImpactMarker");
             Collider collider = impactMarker.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
         }
@@ -1284,9 +1286,9 @@ namespace BallisticSniper
             Collider collider = flash.GetComponent<Collider>();
             if (collider != null) collider.enabled = false;
             PointFlash point = flash.AddComponent<PointFlash>();
-            point.StartScale = 0.08f;
-            point.EndScale = 0.9f;
-            point.Lifetime = 0.11f;
+            point.StartScale = 0.045f;
+            point.EndScale = 0.38f;
+            point.Lifetime = 0.075f;
         }
 
         private void PlayTargetSound(TargetKind kind)

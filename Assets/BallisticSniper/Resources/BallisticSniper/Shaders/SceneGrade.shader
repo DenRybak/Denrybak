@@ -7,7 +7,7 @@ Shader "Hidden/BallisticSniper/SceneGrade"
         _Contrast ("Contrast", Range(0.5, 1.5)) = 1.02
         _Saturation ("Saturation", Range(0.0, 2.0)) = 0.94
         _Vignette ("Vignette", Range(0.0, 0.5)) = 0.10
-        _Sharpness ("Clarity", Range(0.0, 1.0)) = 0.42
+        _Sharpness ("Clarity", Range(0.0, 1.0)) = 0.08
     }
 
     SubShader
@@ -55,7 +55,7 @@ Shader "Hidden/BallisticSniper/SceneGrade"
                 // while retaining texture contrast and the deliberately warm
                 // or cool atmosphere of each stage.
                 luminance = dot(colour, half3(0.2126h, 0.7152h, 0.0722h));
-                colour = lerp(luminance.xxx, colour, 0.85h);
+                colour = lerp(luminance.xxx, colour, 0.96h);
 
                 half2 centred = input.uv * 2.0h - 1.0h;
                 half edge = saturate(dot(centred, centred) * 0.52h);
