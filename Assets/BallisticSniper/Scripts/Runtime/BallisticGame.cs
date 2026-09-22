@@ -7,7 +7,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.1.0";
+        public const string GameVersion = "5.2.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -140,6 +140,15 @@ namespace BallisticSniper
             }
             weaponIndex = Mathf.Clamp(PlayerPrefs.GetInt("weapon_index", 0), 0, GameRules.Weapons.Length - 1);
             zoomIndex = Mathf.Clamp(PlayerPrefs.GetInt("zoom_index", 0), 0, GameRules.ZoomLevels.Length - 1);
+            if (PlayerPrefs.GetInt("v52_scope_upgrade_applied", 0) == 0)
+            {
+                // Existing installs were usually left at the old 4x first step.
+                // Start the upgraded optic at 16x so a distant person is actually identifiable.
+                zoomIndex = 1;
+                PlayerPrefs.SetInt("zoom_index", zoomIndex);
+                PlayerPrefs.SetInt("v52_scope_upgrade_applied", 1);
+                PlayerPrefs.Save();
+            }
             highScore = PlayerPrefs.GetInt(HighScoreKey(), PlayerPrefs.GetInt("high_score", 0));
 
             CreateCamera();
@@ -588,13 +597,13 @@ namespace BallisticSniper
             QualitySettings.vSyncCount = 0;
             QualitySettings.antiAliasing = Mathf.Max(QualitySettings.antiAliasing, 4);
             QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
-            QualitySettings.shadowDistance = 1200f;
+            QualitySettings.shadowDistance = 240f;
             QualitySettings.shadowResolution = ShadowResolution.High;
             QualitySettings.shadows = ShadowQuality.All;
-            QualitySettings.shadowCascades = 4;
+            QualitySettings.shadowCascades = 2;
             QualitySettings.shadowProjection = ShadowProjection.StableFit;
             QualitySettings.pixelLightCount = 6;
-            QualitySettings.lodBias = Mathf.Max(QualitySettings.lodBias, 1.65f);
+            QualitySettings.lodBias = Mathf.Max(QualitySettings.lodBias, 1.25f);
             QualitySettings.maximumLODLevel = 0;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Input.multiTouchEnabled = true;
