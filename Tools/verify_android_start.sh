@@ -45,7 +45,7 @@ for check_index in $(seq 1 120); do
     echo "Android startup exception detected before the menu became ready" >&2
     exit 1
   fi
-  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.0.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
     menu_ready=1
     break
   fi
@@ -74,22 +74,82 @@ read -r screen_width screen_height < <(
 )
 test "$screen_width" -gt "$screen_height"
 
-# The START button occupies x=0.72..0.93 and y=0.51..0.66 in Unity's
-# bottom-left coordinate system. adb uses a top-left origin.
+# First validate the v5 primary path: MISSIONS -> briefing -> live human scene.
+# Unity uses a bottom-left origin; adb uses top-left.
+missions_x=$((screen_width * 805 / 1000))
+missions_y=$((screen_height * 250 / 1000))
+adb logcat -c
+adb shell input tap "$missions_x" "$missions_y"
+
+briefing_ready=0
+for check_index in $(seq 1 60); do
+  adb logcat -d > "$RESULTS_DIR/android-mission-logcat.txt"
+  if grep -Fq "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.0.0 stage=1" "$RESULTS_DIR/android-mission-logcat.txt"; then
+    briefing_ready=1
+    break
+  fi
+  sleep 0.20
+done
+test "$briefing_ready" -eq 1
+adb exec-out screencap -p > "$RESULTS_DIR/android-mission-briefing.png"
+
+briefing_x=$((screen_width * 500 / 1000))
+briefing_y=$((screen_height * 870 / 1000))
+adb logcat -c
+adb shell input tap "$briefing_x" "$briefing_y"
+
+mission_started=0
+for check_index in $(seq 1 60); do
+  adb logcat -d > "$RESULTS_DIR/android-mission-logcat.txt"
+  if grep -Fq "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5" "$RESULTS_DIR/android-mission-logcat.txt"; then
+    mission_started=1
+    break
+  fi
+  sleep 0.20
+done
+test "$mission_started" -eq 1
+adb exec-out screencap -p > "$RESULTS_DIR/android-mission-gameplay.png"
+adb logcat -d --pid="$app_pid" > "$RESULTS_DIR/android-mission-app-logcat.txt"
+if grep -Eq "Can't add component because class|ArgumentNullException|NullReferenceException|MissingReferenceException|MissingComponentException|FATAL EXCEPTION"     "$RESULTS_DIR/android-mission-app-logcat.txt"; then
+  echo "Android mission runtime exception detected" >&2
+  exit 1
+fi
+
+# Relaunch and validate the separate TRAINING path, including a real shot.
+adb shell am force-stop "$PACKAGE_NAME"
+adb shell monkey -p "$PACKAGE_NAME" -c android.intent.category.LAUNCHER 1 >/dev/null
+for _pid_try in $(seq 1 20); do
+  app_pid="$(adb shell pidof "$PACKAGE_NAME" 2>/dev/null | tr -d '\r' || true)"
+  [ -n "$app_pid" ] && break
+  sleep 1
+done
+test -n "$app_pid"
+
+menu_ready=0
+for check_index in $(seq 1 60); do
+  adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
+  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.0.0 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
+    menu_ready=1
+    break
+  fi
+  sleep 0.20
+done
+test "$menu_ready" -eq 1
+
 cadet_x=$((screen_width * 150 / 1000))
 cadet_y=$((screen_height * 755 / 1000))
 adb shell input tap "$cadet_x" "$cadet_y"
 sleep 0.40
-tap_x=$((screen_width * 825 / 1000))
-tap_y=$((screen_height * 415 / 1000))
+
+training_x=$((screen_width * 735 / 1000))
+training_y=$((screen_height * 450 / 1000))
 adb logcat -c
-adb shell input tap "$tap_x" "$tap_y"
+adb shell input tap "$training_x" "$training_y"
 
 started=0
 for check_index in $(seq 1 60); do
   adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
-  if grep -Fq "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True" \
-      "$RESULTS_DIR/android-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True"       "$RESULTS_DIR/android-logcat.txt"; then
     started=1
     break
   fi
@@ -236,4 +296,4 @@ if grep -Eq "Can't add component because class|ArgumentNullException|NullReferen
   exit 1
 fi
 
-echo "Installed APK passed START, bullseye impact close-up, return-to-aim, and no-auto-fire tests at ${screen_width}x${screen_height}."
+echo "Installed APK passed v5 MISSIONS briefing/live-scene, TRAINING shot, impact close-up, return-to-aim, and no-auto-fire tests at ${screen_width}x${screen_height}."

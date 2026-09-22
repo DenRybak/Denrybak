@@ -14,6 +14,7 @@ namespace BallisticSniper
         private Light sun;
         private Light skyFill;
         private Material skyboxMaterial;
+        private Material missionSkyboxMaterial;
         private int currentStage;
         private float currentRange;
         private CampaignMode currentMode;
@@ -48,9 +49,7 @@ namespace BallisticSniper
                 currentRange = operation.RangeMetres;
                 int environmentStage = currentStage == 0 ? 1 : currentStage == 1 ? 3 : 4;
                 ConfigureAtmosphere(environmentStage);
-                CreateTerrain(environmentStage, currentRange);
-                CreateEnvironment(environmentStage, currentRange);
-                CreateGroundScatter(environmentStage, currentRange);
+                CreateMissionEnvironment(operation, currentStage);
                 CreateOperationSetpiece(operation, currentStage);
             }
             else
@@ -247,17 +246,22 @@ namespace BallisticSniper
 
             Shader skyShader = Resources.Load<Shader>("BallisticSniper/Shaders/PanoramaSky") ??
                                Shader.Find("BallisticSniper/PanoramaSky") ??
-                               Resources.Load<Shader>("BallisticSniper/Shaders/GradientSky") ??
-                               Shader.Find("BallisticSniper/GradientSky") ??
                                Shader.Find("Skybox/Procedural");
             if (skyShader != null)
             {
-                skyboxMaterial = new Material(skyShader) { name = "Runtime Cinematic Panorama Sky" };
+                skyboxMaterial = new Material(skyShader) { name = "Runtime Training Panorama Sky" };
                 Texture2D panorama = Resources.Load<Texture2D>("BallisticSniper/Textures/range_panorama_v4");
                 if (panorama != null && skyboxMaterial.HasProperty("_PanoramaTex"))
                     skyboxMaterial.SetTexture("_PanoramaTex", panorama);
-                RenderSettings.skybox = skyboxMaterial;
             }
+
+            Shader missionSkyShader = Resources.Load<Shader>("BallisticSniper/Shaders/GradientSky") ??
+                                      Shader.Find("BallisticSniper/GradientSky") ??
+                                      Shader.Find("Skybox/Procedural");
+            if (missionSkyShader != null)
+                missionSkyboxMaterial = new Material(missionSkyShader) { name = "Runtime Mission Gradient Sky" };
+
+            RenderSettings.skybox = skyboxMaterial != null ? skyboxMaterial : missionSkyboxMaterial;
         }
 
         private void ConfigureAtmosphere(int stage)
@@ -315,33 +319,37 @@ namespace BallisticSniper
             skyFill.intensity = stage == 3 ? 0.14f : 0.20f;
             skyFill.transform.rotation = Quaternion.Euler(48f, sunYaw + 165f, 0f);
 
-            if (skyboxMaterial != null)
+            Material activeSky = currentMode == CampaignMode.Operations && missionSkyboxMaterial != null
+                ? missionSkyboxMaterial
+                : skyboxMaterial != null ? skyboxMaterial : missionSkyboxMaterial;
+            RenderSettings.skybox = activeSky;
+            if (activeSky != null)
             {
-                if (skyboxMaterial.HasProperty("_PanoramaTex"))
+                if (activeSky.HasProperty("_PanoramaTex"))
                 {
-                    Color tint = Color.Lerp(Color.white, horizonColors[stage], currentMode == CampaignMode.Operations ? 0.10f : 0.06f);
-                    skyboxMaterial.SetColor("_Tint", tint);
-                    skyboxMaterial.SetFloat("_Exposure", stage == 3 ? 0.92f : 1.04f);
-                    skyboxMaterial.SetFloat("_Rotation", stage * 34f + (currentMode == CampaignMode.Operations ? 14f : 0f));
-                    skyboxMaterial.SetFloat("_HorizonBoost", stage == 3 ? 0.04f : 0.10f);
+                    Color tint = Color.Lerp(Color.white, horizonColors[stage], 0.06f);
+                    activeSky.SetColor("_Tint", tint);
+                    activeSky.SetFloat("_Exposure", stage == 3 ? 0.92f : 1.04f);
+                    activeSky.SetFloat("_Rotation", stage * 34f);
+                    activeSky.SetFloat("_HorizonBoost", stage == 3 ? 0.04f : 0.10f);
                 }
-                else if (skyboxMaterial.HasProperty("_HorizonColor"))
+                else if (activeSky.HasProperty("_HorizonColor"))
                 {
-                    skyboxMaterial.SetColor("_HorizonColor", horizonColors[stage]);
-                    skyboxMaterial.SetColor("_ZenithColor", zenithColors[stage]);
-                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
-                    skyboxMaterial.SetColor("_SunColor", sunColors[stage]);
-                    skyboxMaterial.SetVector("_SunDirection", -sun.transform.forward);
-                    skyboxMaterial.SetFloat("_SunIntensity", stage == 2 ? 0.34f : 0.42f);
+                    activeSky.SetColor("_HorizonColor", horizonColors[stage]);
+                    activeSky.SetColor("_ZenithColor", zenithColors[stage]);
+                    activeSky.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    activeSky.SetColor("_SunColor", sunColors[stage]);
+                    activeSky.SetVector("_SunDirection", -sun.transform.forward);
+                    activeSky.SetFloat("_SunIntensity", stage == 2 ? 0.34f : 0.42f);
                 }
                 else
                 {
-                    skyboxMaterial.SetColor("_SkyTint", zenithColors[stage]);
-                    skyboxMaterial.SetColor("_GroundColor", fogColors[stage] * 0.52f);
-                    skyboxMaterial.SetFloat("_AtmosphereThickness", 0.68f);
-                    skyboxMaterial.SetFloat("_SunSize", 0.025f);
-                    skyboxMaterial.SetFloat("_SunSizeConvergence", 5.0f);
-                    skyboxMaterial.SetFloat("_Exposure", 0.82f);
+                    activeSky.SetColor("_SkyTint", zenithColors[stage]);
+                    activeSky.SetColor("_GroundColor", fogColors[stage] * 0.52f);
+                    activeSky.SetFloat("_AtmosphereThickness", 0.68f);
+                    activeSky.SetFloat("_SunSize", 0.025f);
+                    activeSky.SetFloat("_SunSizeConvergence", 5.0f);
+                    activeSky.SetFloat("_Exposure", 0.82f);
                 }
             }
         }
@@ -597,6 +605,140 @@ namespace BallisticSniper
             }
         }
 
+        private void CreateMissionEnvironment(OperationDefinition operation, int operationStage)
+        {
+            Material asphalt = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.26f, 0.28f, 0.29f), 0f, 0.22f, "_MissionAsphalt");
+            Material sidewalk = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.58f, 0.60f, 0.58f), 0f, 0.34f, "_MissionSidewalk");
+            Material facadeA = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.47f, 0.50f, 0.50f), 0f, 0.38f, "_MissionFacadeA");
+            Material facadeB = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.31f, 0.35f, 0.37f), 0f, 0.32f, "_MissionFacadeB");
+            Material frame = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, new Color(0.16f, 0.19f, 0.20f), 0.46f, 0.36f, "_MissionFrames");
+            Material glass = materials.TransparentGlass(new Color(0.28f, 0.45f, 0.58f, 0.58f));
+            Material warmWindow = materials.Solid(new Color(1.00f, 0.55f, 0.22f), true, "_MissionWindowGlow");
+            Material vegetation = materials.Get(MaterialLibrary.Surface.Grass, new Color(0.20f, 0.34f, 0.22f), 0f, 0.28f, "_MissionVegetation");
+
+            CreatePrimitive(PrimitiveType.Cube, "Mission Road", stageRoot,
+                new Vector3(0f, -0.22f, currentRange * 0.50f),
+                new Vector3(30f, 0.28f, currentRange + 65f), asphalt, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Left Sidewalk", stageRoot,
+                new Vector3(-18f, -0.06f, currentRange * 0.50f),
+                new Vector3(6f, 0.18f, currentRange + 65f), sidewalk, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Right Sidewalk", stageRoot,
+                new Vector3(18f, -0.06f, currentRange * 0.50f),
+                new Vector3(6f, 0.18f, currentRange + 65f), sidewalk, Quaternion.identity, true);
+
+            int buildingPairs = operationStage == 2 ? 5 : 7;
+            for (int i = 0; i < buildingPairs; i++)
+            {
+                float z = 32f + i * Mathf.Max(28f, (currentRange - 72f) / Mathf.Max(1, buildingPairs - 1));
+                float heightL = 12f + (i % 3) * 4f;
+                float heightR = 14f + ((i + 1) % 3) * 3f;
+                CreateCityBuilding(new Vector3(-30f - (i % 2) * 5f, heightL * 0.5f - 0.05f, z), new Vector3(18f, heightL, 18f),
+                    i % 2 == 0 ? facadeA : facadeB, frame, glass, warmWindow, i + operationStage * 11);
+                CreateCityBuilding(new Vector3(30f + ((i + 1) % 2) * 5f, heightR * 0.5f - 0.05f, z + 7f), new Vector3(18f, heightR, 20f),
+                    i % 2 == 0 ? facadeB : facadeA, frame, glass, warmWindow, i + operationStage * 17 + 3);
+            }
+
+            for (int i = 0; i < 7; i++)
+            {
+                float z = 28f + i * Mathf.Max(25f, (currentRange - 55f) / 7f);
+                CreateStreetLamp(-13.7f, z, frame, warmWindow);
+                CreateStreetLamp(13.7f, z + 8f, frame, warmWindow);
+            }
+
+            for (int i = 0; i < 5; i++)
+            {
+                float z = 48f + i * Mathf.Max(34f, (currentRange - 95f) / 5f);
+                float x = i % 2 == 0 ? -8.5f : 8.5f;
+                CreateParkedCar(new Vector3(x, 0.48f, z), i % 2 == 0 ? new Color(0.18f, 0.24f, 0.30f) : new Color(0.43f, 0.17f, 0.12f), frame);
+            }
+
+            for (int i = 0; i < 14; i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                float z = 42f + (i / 2) * Mathf.Max(24f, (currentRange - 80f) / 7f);
+                Transform tree = new GameObject("Mission Street Tree").transform;
+                tree.SetParent(stageRoot, false);
+                tree.position = new Vector3(side * 20.5f, 0f, z);
+                CreatePrimitive(PrimitiveType.Cylinder, "Tree Trunk", tree, new Vector3(0f, 1.6f, 0f),
+                    new Vector3(0.16f, 1.6f, 0.16f), frame, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Sphere, "Tree Crown", tree, new Vector3(0f, 4.0f, 0f),
+                    new Vector3(1.55f, 2.15f, 1.45f), vegetation, Quaternion.identity, false);
+            }
+
+            // A nearby parapet gives the shooter a physical foreground and
+            // prevents the scene from reading as a flat panorama.
+            CreatePrimitive(PrimitiveType.Cube, "Shooter Rooftop Ledge", stageRoot,
+                new Vector3(0f, 0.48f, 4.4f), new Vector3(5.8f, 0.82f, 0.55f),
+                sidewalk, Quaternion.identity, true);
+
+            RenderSettings.fogStartDistance = currentRange * 0.48f;
+            RenderSettings.fogEndDistance = currentRange + 180f;
+        }
+
+        private void CreateCityBuilding(
+            Vector3 centre,
+            Vector3 size,
+            Material wall,
+            Material frame,
+            Material glass,
+            Material warmWindow,
+            int seed)
+        {
+            CreatePrimitive(PrimitiveType.Cube, "Mission Building", stageRoot, centre, size, wall, Quaternion.identity, true);
+            float faceZ = centre.z - size.z * 0.5f - 0.035f;
+            int floors = Mathf.Clamp(Mathf.RoundToInt(size.y / 3.3f), 3, 6);
+            int columns = 4;
+            for (int floor = 0; floor < floors; floor++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    float x = centre.x + Mathf.Lerp(-size.x * 0.36f, size.x * 0.36f, column / 3f);
+                    float y = centre.y - size.y * 0.5f + 2.1f + floor * 3.05f;
+                    if (y > centre.y + size.y * 0.43f) continue;
+                    bool lit = ((seed + floor * 5 + column * 3) % 7) < 2;
+                    CreatePrimitive(PrimitiveType.Cube, "Window Recess", stageRoot,
+                        new Vector3(x, y, faceZ), new Vector3(2.2f, 1.65f, 0.10f),
+                        lit ? warmWindow : glass, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Window Top Frame", stageRoot,
+                        new Vector3(x, y + 0.90f, faceZ - 0.04f), new Vector3(2.45f, 0.08f, 0.13f),
+                        frame, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Window Bottom Frame", stageRoot,
+                        new Vector3(x, y - 0.90f, faceZ - 0.04f), new Vector3(2.45f, 0.08f, 0.13f),
+                        frame, Quaternion.identity, false);
+                }
+            }
+            CreatePrimitive(PrimitiveType.Cube, "Building Roof Cap", stageRoot,
+                new Vector3(centre.x, centre.y + size.y * 0.5f + 0.20f, centre.z),
+                new Vector3(size.x + 0.7f, 0.32f, size.z + 0.7f), frame, Quaternion.identity, true);
+        }
+
+        private void CreateStreetLamp(float x, float z, Material metal, Material glow)
+        {
+            CreatePrimitive(PrimitiveType.Cylinder, "Street Lamp Pole", stageRoot,
+                new Vector3(x, 2.5f, z), new Vector3(0.08f, 2.5f, 0.08f), metal, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Sphere, "Street Lamp Head", stageRoot,
+                new Vector3(x, 5.05f, z), new Vector3(0.22f, 0.16f, 0.22f), glow, Quaternion.identity, false);
+        }
+
+        private void CreateParkedCar(Vector3 centre, Color bodyTint, Material dark)
+        {
+            Material body = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, bodyTint, 0.55f, 0.38f, "_MissionCar");
+            Material glass = materials.TransparentGlass(new Color(0.18f, 0.32f, 0.42f, 0.68f));
+            CreatePrimitive(PrimitiveType.Cube, "Car Chassis", stageRoot, centre,
+                new Vector3(1.85f, 0.52f, 4.25f), body, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Car Cabin", stageRoot, centre + new Vector3(0f, 0.53f, 0.18f),
+                new Vector3(1.62f, 0.70f, 2.25f), glass, Quaternion.identity, false);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int end = -1; end <= 1; end += 2)
+                {
+                    CreatePrimitive(PrimitiveType.Cylinder, "Car Wheel", stageRoot,
+                        centre + new Vector3(side * 0.94f, -0.18f, end * 1.38f),
+                        new Vector3(0.31f, 0.16f, 0.31f), dark, Quaternion.Euler(0f, 0f, 90f), false);
+                }
+            }
+        }
+
         private void CreateOperationSetpiece(OperationDefinition operation, int operationStage)
         {
             Material concrete = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.72f, 0.75f, 0.73f), 0f, 0.34f, "_OperationArchitecture");
@@ -627,11 +769,15 @@ namespace BallisticSniper
                     new Vector3(0.02f, 0.59f, currentRange - 0.32f), new Vector3(0.09f, 0.30f, 0.09f), steel, Quaternion.identity, true);
 
                 AddHuman("VOLKOV", true, new Vector3(-0.22f, floorY, currentRange + 0.05f),
-                    HumanMotionStyle.Conversation, 0.20f, new Color(0.56f, 0.075f, 0.065f), new Color(0.10f, 0.11f, 0.13f));
+                    HumanMotionStyle.TargetPatrol, 0.20f, new Color(0.56f, 0.075f, 0.065f), new Color(0.10f, 0.11f, 0.13f));
                 AddHuman("SPEAKER", false, new Vector3(0.24f, floorY, currentRange - 0.34f),
                     HumanMotionStyle.CrossingSpeaker, 2.10f, new Color(0.12f, 0.28f, 0.46f), new Color(0.13f, 0.16f, 0.20f));
                 AddHuman("SECURITY", false, new Vector3(2.15f, floorY, currentRange + 0.35f),
                     HumanMotionStyle.Guard, 4.30f, new Color(0.12f, 0.14f, 0.16f), new Color(0.08f, 0.09f, 0.10f));
+                AddHuman("CIVILIAN A", false, new Vector3(-2.05f, floorY, currentRange - 0.48f),
+                    HumanMotionStyle.CivilianWalk, 1.20f, new Color(0.36f, 0.46f, 0.56f), new Color(0.18f, 0.20f, 0.23f));
+                AddHuman("CIVILIAN B", false, new Vector3(1.22f, floorY, currentRange + 0.58f),
+                    HumanMotionStyle.Conversation, 5.20f, new Color(0.44f, 0.30f, 0.18f), new Color(0.12f, 0.14f, 0.18f));
             }
             else if (operation.Kind == OperationKind.HotelWindow)
             {
@@ -661,6 +807,10 @@ namespace BallisticSniper
                     HumanMotionStyle.WindowPatrol, 0.35f, new Color(0.075f, 0.30f, 0.21f), new Color(0.09f, 0.11f, 0.12f));
                 AddHuman("ROOM ATTENDANT", false, new Vector3(0.12f, 0.02f, currentRange + 0.28f),
                     HumanMotionStyle.CrossingSpeaker, 3.25f, new Color(0.58f, 0.62f, 0.66f), new Color(0.16f, 0.19f, 0.22f));
+                AddHuman("HOTEL GUEST", false, new Vector3(-1.45f, 0.02f, currentRange + 1.15f),
+                    HumanMotionStyle.CivilianWalk, 1.55f, new Color(0.38f, 0.20f, 0.42f), new Color(0.18f, 0.20f, 0.22f));
+                AddHuman("SECURITY", false, new Vector3(1.62f, 0.02f, currentRange + 1.30f),
+                    HumanMotionStyle.Guard, 4.70f, new Color(0.10f, 0.13f, 0.16f), new Color(0.07f, 0.08f, 0.10f));
             }
             else
             {
@@ -685,6 +835,10 @@ namespace BallisticSniper
                     HumanMotionStyle.Guard, 2.40f, new Color(0.12f, 0.16f, 0.20f), new Color(0.08f, 0.10f, 0.12f));
                 AddHuman("GUARD BRAVO", false, new Vector3(2.08f, roofY, currentRange + 0.25f),
                     HumanMotionStyle.Guard, 5.10f, new Color(0.17f, 0.19f, 0.21f), new Color(0.08f, 0.10f, 0.12f));
+                AddHuman("TECHNICIAN", false, new Vector3(-2.25f, roofY, currentRange + 0.70f),
+                    HumanMotionStyle.CivilianWalk, 1.75f, new Color(0.30f, 0.36f, 0.40f), new Color(0.10f, 0.12f, 0.14f));
+                AddHuman("GROUND CREW", false, new Vector3(3.15f, roofY, currentRange + 1.15f),
+                    HumanMotionStyle.Guard, 3.65f, new Color(0.25f, 0.29f, 0.33f), new Color(0.09f, 0.10f, 0.12f));
             }
 
             GameObject keyObject = new GameObject("Operation Key Light");
@@ -1051,7 +1205,6 @@ namespace BallisticSniper
         {
             visualRoot = new GameObject("Detailed Target Model").transform;
             visualRoot.SetParent(transform, false);
-            BuildReadabilityFrame();
             switch (Kind)
             {
                 case TargetKind.Steel: BuildSteel(); break;

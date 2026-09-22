@@ -7,6 +7,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
+        public const string GameVersion = "5.0.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -126,7 +127,17 @@ namespace BallisticSniper
             ConfigureApplication();
 
             difficulty = (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt("difficulty", 1), 0, 2);
-            campaignMode = (CampaignMode)Mathf.Clamp(PlayerPrefs.GetInt("campaign_mode", 0), 0, 1);
+            if (PlayerPrefs.GetInt("v5_mission_default_applied", 0) == 0)
+            {
+                campaignMode = CampaignMode.Operations;
+                PlayerPrefs.SetInt("campaign_mode", (int)campaignMode);
+                PlayerPrefs.SetInt("v5_mission_default_applied", 1);
+                PlayerPrefs.Save();
+            }
+            else
+            {
+                campaignMode = (CampaignMode)Mathf.Clamp(PlayerPrefs.GetInt("campaign_mode", 1), 0, 1);
+            }
             weaponIndex = Mathf.Clamp(PlayerPrefs.GetInt("weapon_index", 0), 0, GameRules.Weapons.Length - 1);
             zoomIndex = Mathf.Clamp(PlayerPrefs.GetInt("zoom_index", 0), 0, GameRules.ZoomLevels.Length - 1);
             highScore = PlayerPrefs.GetInt(HighScoreKey(), PlayerPrefs.GetInt("high_score", 0));
@@ -141,7 +152,7 @@ namespace BallisticSniper
             worldStageIndex = 0;
             PrepareCampaignForMenu(false);
             hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
-            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu");
+            Debug.Log("BALLISTIC_ANDROID_MENU_READY version=" + GameVersion + " screen=Menu mode=" + campaignMode);
         }
 
         private void Update()
@@ -219,6 +230,31 @@ namespace BallisticSniper
             hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
         }
 
+        public void StartMissions()
+        {
+            if (screen != GameScreen.Menu) return;
+            SelectMode(CampaignMode.Operations);
+            StartCampaign();
+        }
+
+        public void StartTraining()
+        {
+            if (screen != GameScreen.Menu) return;
+            SelectMode(CampaignMode.Range);
+            StartCampaign();
+        }
+
+        private void SelectMode(CampaignMode selected)
+        {
+            if (campaignMode == selected && campaignPrepared) return;
+            campaignMode = selected;
+            PlayerPrefs.SetInt("campaign_mode", (int)campaignMode);
+            highScore = PlayerPrefs.GetInt(HighScoreKey(), 0);
+            PlayerPrefs.Save();
+            PrepareCampaignForMenu(true);
+            hud.ShowMenu(highScore, difficulty, campaignMode, SelectedWeapon);
+        }
+
         public void StartCampaign()
         {
             if (screen != GameScreen.Menu || campaignStarting) return;
@@ -228,10 +264,21 @@ namespace BallisticSniper
                 Time.timeScale = 1f;
                 if (!campaignPrepared) PrepareCampaignForMenu(true);
 
-                // Everything expensive is prepared while the menu is open.
-                // Hide the menu first, then update the camera and HUD. Even a
-                // device-specific rendering error can no longer leave START
-                // apparently stuck over a changed background.
+                // Story missions always begin with an explicit briefing.
+                // Training keeps the one-tap path used by the range smoke test.
+                if (campaignMode == CampaignMode.Operations)
+                {
+                    screen = GameScreen.Briefing;
+                    campaignPrepared = false;
+                    ResetCameraForBriefing();
+                    ShowBriefing();
+                    Debug.Log("BALLISTIC_ANDROID_MISSION_BRIEFING version=" + GameVersion +
+                              " stage=" + (stage + 1) +
+                              " menuVisible=" + hud.IsMenuVisible +
+                              " briefingVisible=" + hud.IsBriefingVisible);
+                    return;
+                }
+
                 screen = GameScreen.Playing;
                 campaignPrepared = false;
                 hud.ShowGameplay(BuildHudSnapshot(true), false);
@@ -300,6 +347,10 @@ namespace BallisticSniper
             UpdatePlayerCamera();
             RefreshGameplayHud(true);
             hud.ShowGameplay(BuildHudSnapshot(true), false);
+            Debug.Log("BALLISTIC_ANDROID_MISSION_START stage=" + (stage + 1) +
+                      " humans=" + world.Humans.Count +
+                      " primary=" + (world.PrimaryHuman != null ? world.PrimaryHuman.name : "none") +
+                      " screen=" + screen);
         }
 
         public void AdjustElevation(float deltaMil)
@@ -1130,8 +1181,8 @@ namespace BallisticSniper
             string targetNote = campaignMode == CampaignMode.Operations
                 ? lastHumanHit != null
                     ? lastHumanWasPrimary
-                        ? "ПОДТВЕРЖДЕНИЕ • RAGDOLL PHYSICS"
-                        : "ОГОНЬ ПО ПОСТОРОННИМ ЗАПРЕЩЁН"
+                        ? "ПОДТВЕРЖДЕНИЕ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant() + " • RAGDOLL"
+                        : "ПОСТОРОННИЙ ЗАДЕТ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant()
                     : world.IsOperationImpactBlocked(currentShot.Impact)
                         ? "ПУЛЯ ОСТАНОВЛЕНА УКРЫТИЕМ"
                         : "ЦЕЛЬ НЕ ПОРАЖЕНА"
@@ -1289,7 +1340,10 @@ namespace BallisticSniper
         {
             Vector3 position = new Vector3(Mathf.Sin(Time.unscaledTime * 0.18f) * 0.35f, CameraHeight + 0.12f, -0.55f);
             playerCamera.transform.position = position;
-            playerCamera.transform.rotation = Quaternion.LookRotation(new Vector3(0f, CameraHeight, range) - position, Vector3.up);
+            Vector3 focus = campaignMode == CampaignMode.Operations && world.PrimaryHuman != null
+                ? world.PrimaryHuman.AimCentre
+                : new Vector3(0f, CameraHeight, range);
+            playerCamera.transform.rotation = Quaternion.LookRotation(focus - position, Vector3.up);
         }
 
         private void HandleKeyboardInput(float dt)

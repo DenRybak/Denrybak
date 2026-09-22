@@ -25,7 +25,7 @@ namespace BallisticSniper.Tests
             BallisticGame game = Object.FindObjectOfType<BallisticGame>();
             MobileHud hud = Object.FindObjectOfType<MobileHud>();
             game.OpenMenu();
-            hud.TapStartThroughStandardClickForTests();
+            hud.TapTrainingThroughStandardClickForTests();
             yield return null;
             AimDragSurface surface = Object.FindObjectOfType<AimDragSurface>();
             Assert.That(surface, Is.Not.Null);
@@ -63,8 +63,8 @@ namespace BallisticSniper.Tests
             Assert.That(game, Is.Not.Null, "Runtime bootstrap did not create the game");
             MobileHud hud = Object.FindObjectOfType<MobileHud>();
             Assert.That(hud, Is.Not.Null, "Runtime HUD was not created");
-            Assert.That(hud.StartButtonForTests, Is.Not.Null, "START button is missing");
-            game.SetCampaignMode(CampaignMode.Range);
+            Assert.That(hud.StartButtonForTests, Is.Not.Null, "MISSIONS button is missing");
+            Assert.That(hud.TrainingButtonForTests, Is.Not.Null, "TRAINING button is missing");
 
             Difficulty[] difficulties =
             {
@@ -82,11 +82,9 @@ namespace BallisticSniper.Tests
                 }
 
                 game.SetDifficulty(difficulties[index]);
-                Assert.That(hud.StartButtonForTests.gameObject.activeInHierarchy, Is.True);
-                Assert.That(hud.StartButtonForTests.interactable, Is.True);
-                if (index == 0) hud.TapStartThroughAndroidFallbackForTests();
-                else if (index == 1) hud.TapStartThroughPointerDownForTests();
-                else hud.TapStartThroughStandardClickForTests();
+                Assert.That(hud.TrainingButtonForTests.gameObject.activeInHierarchy, Is.True);
+                Assert.That(hud.TrainingButtonForTests.interactable, Is.True);
+                hud.TapTrainingThroughStandardClickForTests();
                 yield return null;
 
                 Assert.That(
@@ -104,7 +102,7 @@ namespace BallisticSniper.Tests
 
                 if (difficulties[index] == Difficulty.Shooter)
                 {
-                    yield return CaptureAndValidateWorldFrame("runtime-world-v4.0.0.png");
+                    yield return CaptureAndValidateWorldFrame("runtime-world-v5.0.0.png");
                 }
 
                 game.OpenMenu();
@@ -131,9 +129,13 @@ namespace BallisticSniper.Tests
             WeaponDefinition before = game.SelectedWeaponForTests;
             game.CycleWeapon();
             Assert.That(game.SelectedWeaponForTests.Kind, Is.Not.EqualTo(before.Kind));
-            game.SetCampaignMode(CampaignMode.Operations);
             game.SetDifficulty(Difficulty.Cadet);
             hud.TapStartThroughAndroidFallbackForTests();
+            yield return null;
+
+            Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Briefing), "Missions must start with a briefing");
+            Assert.That(hud.IsBriefingVisible, Is.True);
+            hud.TapBriefingEnterThroughStandardClickForTests();
             yield return null;
 
             Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing));
@@ -141,13 +143,18 @@ namespace BallisticSniper.Tests
             RangeWorld world = Object.FindObjectOfType<RangeWorld>();
             Assert.That(world, Is.Not.Null);
             Assert.That(world.Targets.Count, Is.EqualTo(0));
-            Assert.That(world.Humans.Count, Is.GreaterThanOrEqualTo(3));
+            Assert.That(world.Humans.Count, Is.GreaterThanOrEqualTo(5));
             Assert.That(world.PrimaryHuman, Is.Not.Null);
             Assert.That(world.PrimaryHuman.Bodies.Count, Is.GreaterThanOrEqualTo(10));
+            Assert.That(world.PrimaryHuman.GetComponent<Animator>(), Is.Not.Null, "Mission character has no skeleton animator host");
+            MeshFilter[] humanMeshes = world.PrimaryHuman.GetComponentsInChildren<MeshFilter>(true);
+            Assert.That(humanMeshes.Length, Is.GreaterThanOrEqualTo(12), "Mission character is not a volumetric multi-part mesh");
+            Assert.That(System.Array.Exists(humanMeshes, m => m.sharedMesh != null && m.sharedMesh.name.Contains("Torso Mesh")), Is.True,
+                "Procedural torso mesh is missing");
             foreach (Rigidbody body in world.PrimaryHuman.Bodies)
                 Assert.That(body.isKinematic, Is.True, "Observation pose is not stable before impact");
 
-            yield return CaptureAndValidateWorldFrame("runtime-operation-v4.0.0.png");
+            yield return CaptureAndValidateWorldFrame("runtime-operation-v5.0.0.png");
 
             HumanMissionActor target = world.PrimaryHuman;
             Vector3 initialCentre = target.AimCentre;
@@ -193,11 +200,10 @@ namespace BallisticSniper.Tests
                 yield return new WaitForSecondsRealtime(0.36f);
             }
 
-            game.SetCampaignMode(CampaignMode.Range);
             for (int i = 0; i < GameRules.Weapons.Length && game.SelectedWeaponForTests.Kind != WeaponKind.Ranger308; i++)
                 game.CycleWeapon();
             game.SetDifficulty(Difficulty.Cadet);
-            hud.TapStartThroughAndroidFallbackForTests();
+            hud.TapTrainingThroughStandardClickForTests();
             yield return null;
             Assert.That(game.CurrentScreen, Is.EqualTo(GameScreen.Playing));
 

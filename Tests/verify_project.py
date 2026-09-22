@@ -77,6 +77,7 @@ def main() -> int:
         "Assets/BallisticSniper/Scripts/Runtime/Ballistics.cs",
         "Assets/BallisticSniper/Scripts/Runtime/GameData.cs",
         "Assets/BallisticSniper/Scripts/Runtime/HumanMissionActor.cs",
+        "Assets/BallisticSniper/Scripts/Runtime/ProceduralHumanMesh.cs",
         "Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs",
         "Assets/BallisticSniper/Scripts/Runtime/RuntimeTypeRetention.cs",
         "Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs",
@@ -127,8 +128,11 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v4.0.0  •  Без рекламы',
-        "game.SetCampaignMode(CampaignMode.Operations)",
+        '"v5.0.0  •  Миссии + тренировка',
+        "game.StartMissions",
+        "game.StartTraining",
+        "TapTrainingThroughStandardClickForTests",
+        "TapBriefingEnterThroughStandardClickForTests",
         "game.CycleWeapon",
         "button.onClick.AddListener(binding.Invoke)",
         "Time.unscaledTime - lastInvokedAt < 0.30f",
@@ -154,6 +158,10 @@ def main() -> int:
         "screen = GameScreen.Playing;",
         "hud.ShowGameplay(BuildHudSnapshot(true), false);",
         "BALLISTIC_ANDROID_START_OK",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING",
+        "BALLISTIC_ANDROID_MISSION_START",
+        "public void StartMissions()",
+        "public void StartTraining()",
         "menuVisible=",
         "worldStageIndex = stage;",
         "if (screen == GameScreen.Help) CloseHelp();",
@@ -166,17 +174,40 @@ def main() -> int:
     if any(token not in game_flow for token in flow_tokens):
         raise AssertionError("direct START-to-gameplay/help navigation flow is missing")
 
+    human_actor = require("Assets/BallisticSniper/Scripts/Runtime/HumanMissionActor.cs").read_text(encoding="utf-8")
+    human_mesh = require("Assets/BallisticSniper/Scripts/Runtime/ProceduralHumanMesh.cs").read_text(encoding="utf-8")
+    human_tokens = (
+        "HumanBodyZone",
+        "HumanHitPart",
+        "TargetPatrol",
+        "CivilianWalk",
+        "ProceduralHumanMesh.Torso",
+        "ProceduralHumanMesh.Head",
+        "CharacterJoint",
+        "AnimatorCullingMode.AlwaysAnimate",
+        "ActivateRagdoll",
+    )
+    mesh_tokens = ("private static Mesh Lathe", "private static Mesh Ellipsoid", "RecalculateNormals", "RecalculateTangents")
+    if any(token not in human_actor for token in human_tokens) or any(token not in human_mesh for token in mesh_tokens):
+        raise AssertionError("v5 volumetric mission character skeleton/mesh is missing")
+
     rendering = require("Assets/BallisticSniper/Scripts/Runtime/RangeWorld.cs").read_text(encoding="utf-8")
     atlas_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/AtlasLit.shader").read_text(encoding="utf-8")
     grade_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/SceneGrade.shader").read_text(encoding="utf-8")
     render_tokens = (
         "Sky Fill Light",
         "CreateGroundScatter",
+        "CreateMissionEnvironment",
+        "CreateCityBuilding",
+        "CreateParkedCar",
         "BallisticSniper/Shaders/PanoramaSky",
+        "BallisticSniper/Shaders/GradientSky",
+        "missionSkyboxMaterial",
         "RenderSettings.ambientIntensity = 1.0f",
         "MaterialPropertyBlock",
-        "BuildReadabilityFrame",
         "CreateOperationSetpiece",
+        "HumanMotionStyle.TargetPatrol",
+        "HumanMotionStyle.CivilianWalk",
         "ApplyHumanImpact",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
@@ -195,12 +226,12 @@ def main() -> int:
         "Difficulty.Shooter",
         "Difficulty.Expert",
         "TapStartThroughAndroidFallbackForTests",
-        "TapStartThroughPointerDownForTests",
-        "TapStartThroughStandardClickForTests",
+        "TapTrainingThroughStandardClickForTests",
+        "TapBriefingEnterThroughStandardClickForTests",
         "Is.EqualTo(GameScreen.Playing)",
         "IsMenuVisible",
-        "runtime-world-v4.0.0.png",
-        "runtime-operation-v4.0.0.png",
+        "runtime-world-v5.0.0.png",
+        "runtime-operation-v5.0.0.png",
         "OperationsBuildCharactersAndReleaseARealJointedRagdoll",
         "CharacterJoint",
         "ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred",
@@ -216,15 +247,15 @@ def main() -> int:
 
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
-        'PlayerSettings.productName = "Ballistic Sniper 4.0"',
-        'PlayerSettings.bundleVersion = "4.0.0-unity"',
+        'PlayerSettings.productName = "Ballistic Sniper 5.0"',
+        'PlayerSettings.bundleVersion = "5.0.0-unity"',
         '"com.denis.ballisticsniper.unity"',
-        '"Ballistic-Sniper-Unity-v4.0.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 10",
+        '"Ballistic-Sniper-Unity-v5.0.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 11",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
-        raise AssertionError("v4.0 update-compatible Android identity is missing")
+        raise AssertionError("v5.0 update-compatible Android identity is missing")
 
     stripping_tokens = (
         "PlayerSettings.stripEngineCode = false",
@@ -251,7 +282,11 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=4.0.0 screen=Menu",
+        "BALLISTIC_ANDROID_MENU_READY version=5.0.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.0.0 stage=1",
+        "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
+        "android-mission-briefing.png",
+        "android-mission-gameplay.png",
         "BALLISTIC_ANDROID_START_OK screen=Playing menuVisible=False gameplayVisible=True scopeVisible=True",
         "BALLISTIC_ANDROID_IMPACT_CLOSEUP",
         "BALLISTIC_ANDROID_RESULT_READY",
@@ -319,8 +354,8 @@ def main() -> int:
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
     print("OK: Android buttons use debounced touch-down plus standard UI click fallback")
-    print("OK: START enters gameplay directly for all three difficulties in the Unity smoke test")
-    print("OK: cinematic panorama, high-contrast target frames, jointed ragdolls and render validation are present")
+    print("OK: MISSIONS enter briefing first; TRAINING enters the range directly in Unity smoke tests")
+    print("OK: v5 missions use volumetric procedural humans, jointed ragdolls, urban depth cues and render validation")
     return 0
 
 
