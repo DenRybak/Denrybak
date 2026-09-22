@@ -166,7 +166,7 @@ namespace BallisticSniper
         public const int OperationStages = 3;
         public const int OperationMaxScore = 300;
 
-        public static readonly int[] ZoomLevels = { 4, 6, 8, 12, 16 };
+        public static readonly int[] ZoomLevels = { 8, 16, 24, 36, 50 };
         public static readonly float[] LanesMil = { -6f, -3f, 0f, 3f, 6f };
 
         public static readonly WeaponDefinition[] Weapons =
