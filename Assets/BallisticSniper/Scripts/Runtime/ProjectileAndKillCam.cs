@@ -27,7 +27,7 @@ namespace BallisticSniper
             completed = onCompleted;
             age = 0f;
             transform.position = record.Start;
-            transform.localScale = new Vector3(0.008f, 0.050f, 0.008f);
+            transform.localScale = new Vector3(0.0045f, 0.044f, 0.0045f);
 
             MeshRenderer renderer = GetComponent<MeshRenderer>();
             if (renderer != null) renderer.sharedMaterial = bulletMaterial;
@@ -35,35 +35,30 @@ namespace BallisticSniper
             if (collider != null) collider.enabled = false;
 
             trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.09f, 0.035f, 0.10f);
-            trail.startWidth = 0.006f;
-            trail.endWidth = 0.0004f;
-            trail.minVertexDistance = 0.09f;
-            trail.numCornerVertices = 2;
-            trail.numCapVertices = 2;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.070f, 0.028f, 0.075f);
+            trail.startWidth = 0.0028f;
+            trail.endWidth = 0.00015f;
+            trail.minVertexDistance = 0.012f;
+            trail.numCornerVertices = 8;
+            trail.numCapVertices = 8;
+            trail.alignment = LineAlignment.View;
+            trail.textureMode = LineTextureMode.Stretch;
+            trail.generateLightingData = false;
             trail.sharedMaterial = bulletMaterial;
-            trail.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 0.15f),
-                new Keyframe(0.16f, 0.62f),
-                new Keyframe(0.38f, 0.28f),
-                new Keyframe(0.62f, 0.74f),
-                new Keyframe(0.82f, 0.34f),
-                new Keyframe(1f, 0f));
+            trail.widthCurve = AnimationCurve.EaseInOut(0f, 0.28f, 1f, 0f);
             Gradient flightGradient = new Gradient();
             flightGradient.SetKeys(
                 new[]
                 {
-                    new GradientColorKey(new Color(1f, 0.96f, 0.82f), 0f),
-                    new GradientColorKey(new Color(1f, 0.78f, 0.34f), 0.42f),
-                    new GradientColorKey(new Color(0.95f, 0.42f, 0.12f), 1f)
+                    new GradientColorKey(new Color(1f, 0.97f, 0.88f), 0f),
+                    new GradientColorKey(new Color(1f, 0.78f, 0.34f), 0.58f),
+                    new GradientColorKey(new Color(0.88f, 0.34f, 0.08f), 1f)
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.70f, 0f),
-                    new GradientAlphaKey(0.18f, 0.20f),
-                    new GradientAlphaKey(0.48f, 0.42f),
-                    new GradientAlphaKey(0.10f, 0.65f),
-                    new GradientAlphaKey(0.26f, 0.82f),
+                    new GradientAlphaKey(0.64f, 0f),
+                    new GradientAlphaKey(0.38f, 0.34f),
+                    new GradientAlphaKey(0.16f, 0.72f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -151,49 +146,47 @@ namespace BallisticSniper
 
             bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             bullet.name = "Kill-cam .308 Projectile";
-            bullet.transform.localScale = new Vector3(0.010f, 0.070f, 0.010f);
+            bullet.transform.localScale = new Vector3(0.0055f, 0.060f, 0.0055f);
             Collider bulletCollider = bullet.GetComponent<Collider>();
             if (bulletCollider != null) bulletCollider.enabled = false;
             MeshRenderer renderer = bullet.GetComponent<MeshRenderer>();
             if (renderer != null) renderer.sharedMaterial = bulletMaterial;
             trail = bullet.AddComponent<TrailRenderer>();
-            trail.time = 0.14f;
-            trail.startWidth = 0.008f;
-            trail.endWidth = 0.0005f;
-            trail.minVertexDistance = 0.055f;
-            trail.numCornerVertices = 3;
-            trail.numCapVertices = 2;
+            trail.time = 0.095f;
+            trail.startWidth = 0.0034f;
+            trail.endWidth = 0.00018f;
+            trail.minVertexDistance = 0.010f;
+            trail.numCornerVertices = 10;
+            trail.numCapVertices = 8;
+            trail.alignment = LineAlignment.View;
+            trail.textureMode = LineTextureMode.Stretch;
+            trail.generateLightingData = false;
             trail.sharedMaterial = bulletMaterial;
             trail.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 0.20f),
-                new Keyframe(0.12f, 0.72f),
-                new Keyframe(0.30f, 0.36f),
-                new Keyframe(0.48f, 0.82f),
-                new Keyframe(0.70f, 0.26f),
-                new Keyframe(0.88f, 0.54f),
-                new Keyframe(1f, 0f));
+                new Keyframe(0f, 0.32f, 0f, 2.2f),
+                new Keyframe(0.20f, 0.92f, 1.1f, 0.4f),
+                new Keyframe(0.62f, 0.58f, -0.55f, -0.55f),
+                new Keyframe(1f, 0f, -0.8f, 0f));
             Gradient killGradient = new Gradient();
             killGradient.SetKeys(
                 new[]
                 {
-                    new GradientColorKey(new Color(1f, 0.98f, 0.90f), 0f),
-                    new GradientColorKey(new Color(1f, 0.80f, 0.38f), 0.46f),
-                    new GradientColorKey(new Color(0.95f, 0.34f, 0.08f), 1f)
+                    new GradientColorKey(new Color(1f, 0.99f, 0.94f), 0f),
+                    new GradientColorKey(new Color(1f, 0.82f, 0.42f), 0.62f),
+                    new GradientColorKey(new Color(0.90f, 0.36f, 0.10f), 1f)
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.78f, 0f),
-                    new GradientAlphaKey(0.18f, 0.18f),
-                    new GradientAlphaKey(0.52f, 0.38f),
-                    new GradientAlphaKey(0.12f, 0.60f),
-                    new GradientAlphaKey(0.32f, 0.80f),
+                    new GradientAlphaKey(0.72f, 0f),
+                    new GradientAlphaKey(0.48f, 0.30f),
+                    new GradientAlphaKey(0.20f, 0.72f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = killGradient;
 
             impactHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             impactHighlight.name = "Kill-cam Impact Point";
-            impactHighlight.transform.localScale = Vector3.one * 0.024f;
+            impactHighlight.transform.localScale = Vector3.one * 0.016f;
             Collider impactCollider = impactHighlight.GetComponent<Collider>();
             if (impactCollider != null) impactCollider.enabled = false;
             MeshRenderer impactRenderer = impactHighlight.GetComponent<MeshRenderer>();
