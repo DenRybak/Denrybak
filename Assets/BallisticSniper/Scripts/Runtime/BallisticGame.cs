@@ -8,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.4.0";
+        public const string GameVersion = "5.4.1";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -673,8 +673,8 @@ namespace BallisticSniper
             killCam = gameObject.AddComponent<KillCamDirector>();
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
-            Material tracerMaterial = world.Materials.Solid(
-                new Color(0.58f, 0.24f, 0.055f), true, "_TracerV54");
+            Material tracerMaterial = world.Materials.Tracer(
+                new Color(1.00f, 0.50f, 0.16f, 0.52f), "_TracerV541");
             killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial);
         }
 
@@ -887,8 +887,8 @@ namespace BallisticSniper
         {
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
-            Material tracerMaterial = world.Materials.Solid(
-                new Color(0.58f, 0.24f, 0.055f), true, "_TracerV54");
+            Material tracerMaterial = world.Materials.Tracer(
+                new Color(1.00f, 0.50f, 0.16f, 0.52f), "_TracerV541");
             GameObject bullet = ProjectileVisualFactory.Create(
                 "Visible " + SelectedWeapon.Calibre + " Projectile", bulletMaterial);
             bullet.transform.SetParent(transform, true);
