@@ -107,9 +107,8 @@ def main() -> int:
         raise AssertionError("cinematic name table must contain 14 variants")
 
     kill_cam = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
-    cases = {int(value) for value in re.findall(r"case\s+(\d+)\s*:", kill_cam)}
-    if not set(range(13)).issubset(cases) or "default:" not in kill_cam:
-        raise AssertionError("kill-cam switch does not implement all 14 camera paths")
+    if "int profile = variant % 3;" not in kill_cam or kill_cam.count("profile ==") < 2:
+        raise AssertionError("restrained three-profile kill-cam is missing")
 
     controls = require("Assets/BallisticSniper/Scripts/UI/HudGraphics.cs").read_text(encoding="utf-8")
     if "HoldDragButton" not in controls or "Dragged?.Invoke(eventData.delta)" not in controls:
