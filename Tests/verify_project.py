@@ -107,7 +107,7 @@ def main() -> int:
         raise AssertionError("cinematic name table must contain 14 variants")
 
     if "ZoomLevels = { 8, 16, 24, 36, 50 }" not in game_data:
-        raise AssertionError("v5.2 high-magnification sniper optic is missing")
+        raise AssertionError("v5.3 high-magnification sniper optic is missing")
 
     kill_cam = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
     if ("int profile = variant % 3;" not in kill_cam or
@@ -132,7 +132,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.2.0  •  Миссии + тренировка',
+        '"v5.3.0  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -174,6 +174,8 @@ def main() -> int:
         "fireReadyAt = Time.unscaledTime + 0.40f",
         "BALLISTIC_ANDROID_RETURN_TO_TARGETS",
         "BALLISTIC_ANDROID_AIM_READY",
+        "PlayPrimaryImpactReplay",
+        "Time.timeScale = 0.20f",
     )
     if any(token not in game_flow for token in flow_tokens):
         raise AssertionError("direct START-to-gameplay/help navigation flow is missing")
@@ -193,6 +195,9 @@ def main() -> int:
         "SetSegmentFromAnchor",
         "walkFacing",
         "footLiftL",
+        "walkCycle",
+        "ReplayFocus",
+        "_PrimaryJacketV53",
     )
     mesh_tokens = ("private static Mesh Lathe", "private static Mesh Ellipsoid", "RecalculateNormals", "RecalculateTangents")
     if any(token not in human_actor for token in human_tokens) or any(token not in human_mesh for token in mesh_tokens):
@@ -216,6 +221,8 @@ def main() -> int:
         "HumanMotionStyle.TargetPatrol",
         "HumanMotionStyle.CivilianWalk",
         "ApplyHumanImpact",
+        "SpawnHumanBloodMist",
+        "Target Impact Dust",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
     grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.02f', '"_Sharpness", 0.08f')
@@ -228,14 +235,14 @@ def main() -> int:
 
     projectile = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
     polish_tokens = (
-        "trail.startWidth = 0.008f",
-        "impactHighlight.transform.localScale = Vector3.one * 0.024f",
-        "trail.widthCurve = new AnimationCurve",
+        "trail.startWidth = 0.0034f",
+        "impactHighlight.transform.localScale = Vector3.one * 0.016f",
+        "trail.numCornerVertices = 10",
         "trail.colorGradient = killGradient",
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.2 bullet-cam/tracer polish is missing")
+        raise AssertionError("v5.3 bullet-cam/tracer polish is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -268,7 +275,7 @@ def main() -> int:
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
         'PlayerSettings.bundleVersion = "5.2.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.2.0.apk"',
+        '"Ballistic-Sniper-Unity-v5.3.0.apk"',
         "PlayerSettings.Android.bundleVersionCode = 13",
         "AndroidArchitecture.X86_64",
     )
