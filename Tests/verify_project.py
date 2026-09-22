@@ -247,15 +247,15 @@ def main() -> int:
 
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
-        'PlayerSettings.productName = "Ballistic Sniper 5.0"',
+        'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
         'PlayerSettings.bundleVersion = "5.0.0-unity"',
-        '"com.denis.ballisticsniper.unity"',
+        '"com.denis.ballisticsniper.v5preview"',
         '"Ballistic-Sniper-Unity-v5.0.0.apk"',
         "PlayerSettings.Android.bundleVersionCode = 11",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
-        raise AssertionError("v5.0 update-compatible Android identity is missing")
+        raise AssertionError("v5 preview Android identity is missing")
 
     stripping_tokens = (
         "PlayerSettings.stripEngineCode = false",
