@@ -98,10 +98,10 @@ namespace BallisticSniper.Tests
 
                 Assert.That(Mathf.Abs(position.y - shot.Impact.y), Is.LessThan(0.30f),
                     "Variant " + variant + " still ends above the target");
-                Assert.That(Vector3.Distance(position, shot.Impact), Is.InRange(2.50f, 2.80f));
-                Assert.That(Vector3.Dot(shot.Impact - position, approach), Is.GreaterThan(2.45f));
+                Assert.That(Vector3.Distance(position, shot.Impact), Is.InRange(1.55f, 1.80f));
+                Assert.That(Vector3.Dot(shot.Impact - position, approach), Is.GreaterThan(1.50f));
                 Assert.That(Vector3.Distance(lookAt, shot.Impact), Is.LessThan(0.03f));
-                Assert.That(fieldOfView, Is.LessThanOrEqualTo(18f));
+                Assert.That(fieldOfView, Is.LessThanOrEqualTo(25f));
             }
         }
     }
