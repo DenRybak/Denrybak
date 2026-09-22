@@ -964,6 +964,7 @@ namespace BallisticSniper
             particleObject.transform.SetParent(stageRoot, false);
             particleObject.transform.position = position;
             ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ParticleSystem.MainModule main = system.main;
             main.loop = false;
             main.duration = 0.3f;
@@ -1003,6 +1004,7 @@ namespace BallisticSniper
                 particleObject.transform.rotation = Quaternion.LookRotation(shotDirection.normalized, Vector3.up);
 
             ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ParticleSystem.MainModule main = system.main;
             main.loop = false;
             main.duration = 0.16f;
@@ -1058,6 +1060,7 @@ namespace BallisticSniper
                 particleObject.transform.rotation = Quaternion.LookRotation(shotDirection.normalized, Vector3.up);
 
             ParticleSystem system = particleObject.AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ParticleSystem.MainModule main = system.main;
             main.loop = false;
             main.duration = 0.12f;
