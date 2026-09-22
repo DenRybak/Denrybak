@@ -8,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.3.0";
+        public const string GameVersion = "5.4.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -671,8 +671,11 @@ namespace BallisticSniper
         private void CreateKillCam()
         {
             killCam = gameObject.AddComponent<KillCamDirector>();
-            Material bulletMaterial = world.Materials.Solid(new Color(1f, 0.67f, 0.12f), true, "_Tracer");
-            killCam.Initialize(playerCamera, bulletMaterial);
+            Material bulletMaterial = world.Materials.MetallicSolid(
+                new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
+            Material tracerMaterial = world.Materials.Solid(
+                new Color(0.58f, 0.24f, 0.055f), true, "_TracerV54");
+            killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial);
         }
 
         private void PrepareCampaignForMenu(bool rebuildWorld)
@@ -882,14 +885,15 @@ namespace BallisticSniper
 
         private void LaunchTracer()
         {
-            GameObject bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            bullet.name = "Visible " + SelectedWeapon.Calibre + " Tracer";
+            Material bulletMaterial = world.Materials.MetallicSolid(
+                new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
+            Material tracerMaterial = world.Materials.Solid(
+                new Color(0.58f, 0.24f, 0.055f), true, "_TracerV54");
+            GameObject bullet = ProjectileVisualFactory.Create(
+                "Visible " + SelectedWeapon.Calibre + " Projectile", bulletMaterial);
             bullet.transform.SetParent(transform, true);
             activeProjectile = bullet.AddComponent<ProjectileTracer>();
-            activeProjectile.Begin(
-                currentShot,
-                world.Materials.Solid(new Color(1f, 0.67f, 0.12f), true, "_Tracer"),
-                ResolveShot);
+            activeProjectile.Begin(currentShot, tracerMaterial, ResolveShot);
         }
 
         private void ResolveShot()
