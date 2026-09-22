@@ -106,9 +106,14 @@ def main() -> int:
     if not names_block or len(re.findall(r'"[^"]+"', names_block.group(1))) != 14:
         raise AssertionError("cinematic name table must contain 14 variants")
 
+    if "ZoomLevels = { 8, 16, 24, 36, 50 }" not in game_data:
+        raise AssertionError("v5.2 high-magnification sniper optic is missing")
+
     kill_cam = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
-    if "int profile = variant % 3;" not in kill_cam or kill_cam.count("profile ==") < 2:
-        raise AssertionError("restrained three-profile kill-cam is missing")
+    if ("int profile = variant % 3;" not in kill_cam or
+            "float bulletT = Mathf.Clamp01(t / 0.92f);" not in kill_cam or
+            "Mathf.InverseLerp(0.94f, 1.0f, progress)" not in kill_cam):
+        raise AssertionError("true projectile-follow bullet camera is missing")
 
     controls = require("Assets/BallisticSniper/Scripts/UI/HudGraphics.cs").read_text(encoding="utf-8")
     if "HoldDragButton" not in controls or "Dragged?.Invoke(eventData.delta)" not in controls:
@@ -127,7 +132,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.1.0  •  Миссии + тренировка',
+        '"v5.2.0  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -185,6 +190,9 @@ def main() -> int:
         "CharacterJoint",
         "AnimatorCullingMode.AlwaysAnimate",
         "ActivateRagdoll",
+        "SetSegmentFromAnchor",
+        "walkFacing",
+        "footLiftL",
     )
     mesh_tokens = ("private static Mesh Lathe", "private static Mesh Ellipsoid", "RecalculateNormals", "RecalculateTangents")
     if any(token not in human_actor for token in human_tokens) or any(token not in human_mesh for token in mesh_tokens):
@@ -220,12 +228,14 @@ def main() -> int:
 
     projectile = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
     polish_tokens = (
-        "trail.startWidth = 0.018f",
-        "impactHighlight.transform.localScale = Vector3.one * 0.040f",
+        "trail.startWidth = 0.008f",
+        "impactHighlight.transform.localScale = Vector3.one * 0.024f",
+        "trail.widthCurve = new AnimationCurve",
+        "trail.colorGradient = killGradient",
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.1 restrained bullet-cam polish is missing")
+        raise AssertionError("v5.2 bullet-cam/tracer polish is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -256,10 +266,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.1.0-unity"',
+        'PlayerSettings.bundleVersion = "5.2.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.1.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 12",
+        '"Ballistic-Sniper-Unity-v5.2.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 13",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -290,8 +300,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.1.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.1.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.2.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.2.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
