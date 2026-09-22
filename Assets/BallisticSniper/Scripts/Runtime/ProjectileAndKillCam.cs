@@ -27,7 +27,7 @@ namespace BallisticSniper
             completed = onCompleted;
             age = 0f;
             transform.position = record.Start;
-            transform.localScale = new Vector3(0.012f, 0.060f, 0.012f);
+            transform.localScale = new Vector3(0.008f, 0.050f, 0.008f);
 
             MeshRenderer renderer = GetComponent<MeshRenderer>();
             if (renderer != null) renderer.sharedMaterial = bulletMaterial;
@@ -35,13 +35,38 @@ namespace BallisticSniper
             if (collider != null) collider.enabled = false;
 
             trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.12f, 0.045f, 0.16f);
-            trail.startWidth = 0.014f;
-            trail.endWidth = 0.0015f;
-            trail.minVertexDistance = 0.16f;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.09f, 0.035f, 0.10f);
+            trail.startWidth = 0.006f;
+            trail.endWidth = 0.0004f;
+            trail.minVertexDistance = 0.09f;
+            trail.numCornerVertices = 2;
+            trail.numCapVertices = 2;
             trail.sharedMaterial = bulletMaterial;
-            trail.startColor = new Color(1f, 0.92f, 0.70f, 0.72f);
-            trail.endColor = new Color(1f, 0.72f, 0.32f, 0f);
+            trail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 0.15f),
+                new Keyframe(0.16f, 0.62f),
+                new Keyframe(0.38f, 0.28f),
+                new Keyframe(0.62f, 0.74f),
+                new Keyframe(0.82f, 0.34f),
+                new Keyframe(1f, 0f));
+            Gradient flightGradient = new Gradient();
+            flightGradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(1f, 0.96f, 0.82f), 0f),
+                    new GradientColorKey(new Color(1f, 0.78f, 0.34f), 0.42f),
+                    new GradientColorKey(new Color(0.95f, 0.42f, 0.12f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.70f, 0f),
+                    new GradientAlphaKey(0.18f, 0.20f),
+                    new GradientAlphaKey(0.48f, 0.42f),
+                    new GradientAlphaKey(0.10f, 0.65f),
+                    new GradientAlphaKey(0.26f, 0.82f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            trail.colorGradient = flightGradient;
         }
 
         private void Update()
@@ -93,7 +118,7 @@ namespace BallisticSniper
         private Action completed;
         private float elapsed;
         private float duration;
-        private const float ImpactHoldSeconds = 0.82f;
+        private const float ImpactHoldSeconds = 0.42f;
         private float originalNearClip;
         private int variant;
         private bool impactVisible;
@@ -116,7 +141,7 @@ namespace BallisticSniper
             variant = Mathf.Abs(cameraVariant) % GameRules.CinematicNames.Length;
             completed = onCompleted;
             elapsed = 0f;
-            duration = 1.78f + (variant % 3) * 0.08f;
+            duration = 2.15f + (variant % 3) * 0.06f;
             originalNearClip = targetCamera.nearClipPlane;
             targetCamera.nearClipPlane = 0.04f;
             Active = true;
@@ -126,23 +151,49 @@ namespace BallisticSniper
 
             bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             bullet.name = "Kill-cam .308 Projectile";
-            bullet.transform.localScale = new Vector3(0.018f, 0.085f, 0.018f);
+            bullet.transform.localScale = new Vector3(0.010f, 0.070f, 0.010f);
             Collider bulletCollider = bullet.GetComponent<Collider>();
             if (bulletCollider != null) bulletCollider.enabled = false;
             MeshRenderer renderer = bullet.GetComponent<MeshRenderer>();
             if (renderer != null) renderer.sharedMaterial = bulletMaterial;
             trail = bullet.AddComponent<TrailRenderer>();
-            trail.time = 0.18f;
-            trail.startWidth = 0.018f;
-            trail.endWidth = 0.0015f;
-            trail.minVertexDistance = 0.08f;
+            trail.time = 0.14f;
+            trail.startWidth = 0.008f;
+            trail.endWidth = 0.0005f;
+            trail.minVertexDistance = 0.055f;
+            trail.numCornerVertices = 3;
+            trail.numCapVertices = 2;
             trail.sharedMaterial = bulletMaterial;
-            trail.startColor = new Color(1f, 0.94f, 0.78f, 0.82f);
-            trail.endColor = new Color(1f, 0.68f, 0.24f, 0f);
+            trail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 0.20f),
+                new Keyframe(0.12f, 0.72f),
+                new Keyframe(0.30f, 0.36f),
+                new Keyframe(0.48f, 0.82f),
+                new Keyframe(0.70f, 0.26f),
+                new Keyframe(0.88f, 0.54f),
+                new Keyframe(1f, 0f));
+            Gradient killGradient = new Gradient();
+            killGradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(new Color(1f, 0.98f, 0.90f), 0f),
+                    new GradientColorKey(new Color(1f, 0.80f, 0.38f), 0.46f),
+                    new GradientColorKey(new Color(0.95f, 0.34f, 0.08f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.78f, 0f),
+                    new GradientAlphaKey(0.18f, 0.18f),
+                    new GradientAlphaKey(0.52f, 0.38f),
+                    new GradientAlphaKey(0.12f, 0.60f),
+                    new GradientAlphaKey(0.32f, 0.80f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            trail.colorGradient = killGradient;
 
             impactHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             impactHighlight.name = "Kill-cam Impact Point";
-            impactHighlight.transform.localScale = Vector3.one * 0.040f;
+            impactHighlight.transform.localScale = Vector3.one * 0.024f;
             Collider impactCollider = impactHighlight.GetComponent<Collider>();
             if (impactCollider != null) impactCollider.enabled = false;
             MeshRenderer impactRenderer = impactHighlight.GetComponent<MeshRenderer>();
@@ -165,7 +216,7 @@ namespace BallisticSniper
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             // The replay gives the final third of the clip to impact detail.
-            float bulletT = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.82f));
+            float bulletT = Mathf.Clamp01(t / 0.92f);
             Vector3 bulletPosition = ShotPath.Position(shot, bulletT);
             Vector3 nextPosition = ShotPath.Position(shot, Mathf.Min(1f, bulletT + 0.003f));
             bullet.transform.position = bulletPosition;
@@ -199,40 +250,34 @@ namespace BallisticSniper
                 ? bulletDirection.normalized
                 : (shot.Impact - shot.Start).normalized;
             if (direction.sqrMagnitude < 0.5f) direction = Vector3.forward;
+
             Vector3 side = Vector3.Cross(Vector3.up, direction).normalized;
             if (side.sqrMagnitude < 0.5f) side = Vector3.right;
             float sideSign = (variant & 1) == 0 ? 1f : -1f;
 
+            // True chase camera: stay attached to the projectile for almost
+            // the entire replay. Variants only change the offset slightly,
+            // rather than cutting to unrelated viewpoints.
             int profile = variant % 3;
-            Vector3 cameraPosition;
-            Vector3 lookAt;
-            float fov;
-            if (profile == 0)
-            {
-                cameraPosition = bulletPosition - direction * 2.55f + side * (0.55f * sideSign) + Vector3.up * 0.26f;
-                lookAt = bulletPosition + direction * 2.4f;
-                fov = 35f;
-            }
-            else if (profile == 1)
-            {
-                cameraPosition = bulletPosition - direction * 3.35f + side * (1.15f * sideSign) + Vector3.up * 0.48f;
-                lookAt = bulletPosition + direction * 1.65f;
-                fov = 38f;
-            }
-            else
-            {
-                cameraPosition = bulletPosition - direction * 2.05f + side * (0.78f * sideSign) + Vector3.up * 0.16f;
-                lookAt = bulletPosition + direction * 3.0f;
-                fov = 32f;
-            }
+            float behind = profile == 0 ? 1.25f : profile == 1 ? 1.65f : 1.05f;
+            float lateral = profile == 0 ? 0.24f : profile == 1 ? 0.40f : 0.14f;
+            float height = profile == 0 ? 0.12f : profile == 1 ? 0.20f : 0.07f;
 
+            Vector3 cameraPosition =
+                bulletPosition - direction * behind +
+                side * lateral * sideSign +
+                Vector3.up * height;
+            Vector3 lookAt = bulletPosition + direction * 3.8f;
+            float fov = profile == 1 ? 31f : 28f;
+
+            // Only at the final instant ease into a readable impact detail.
             CalculateImpactCloseUp(shot, variant, out Vector3 impactPosition, out Vector3 impactLookAt, out float impactFov);
-            float impactBlend = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.68f, 0.90f, progress));
+            float impactBlend = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.94f, 1.0f, progress));
             cameraPosition = Vector3.Lerp(cameraPosition, impactPosition, impactBlend);
             lookAt = Vector3.Lerp(lookAt, impactLookAt, impactBlend);
             fov = Mathf.Lerp(fov, impactFov, impactBlend);
 
-            cameraPosition.y = Mathf.Max(0.12f, cameraPosition.y);
+            cameraPosition.y = Mathf.Max(0.10f, cameraPosition.y);
             targetCamera.transform.position = cameraPosition;
             Vector3 forward = lookAt - cameraPosition;
             if (forward.sqrMagnitude < 0.0001f) forward = Vector3.forward;
