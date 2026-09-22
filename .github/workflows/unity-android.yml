@@ -3,7 +3,7 @@ name: Build Unity Android APK
 "on":
   workflow_dispatch:
   push:
-    branches: [main, codex/unity-v3-0-2-menu-fix, gpt/v5-missions]
+    branches: [main, codex/unity-v3-0-2-menu-fix, gpt/v5-missions, gpt/v5-installable-preview]
 
 permissions:
   contents: read
@@ -201,7 +201,7 @@ jobs:
           script: >-
             bash Tools/verify_android_start.sh
             Builds/Android/Ballistic-Sniper-Unity-v5.0.0.apk
-            com.denis.ballisticsniper.unity
+            com.denis.ballisticsniper.v5preview
 
       - name: Preserve the Android signature verifier for release signing
         if: always()
