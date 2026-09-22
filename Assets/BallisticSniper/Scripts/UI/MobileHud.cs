@@ -551,7 +551,7 @@ namespace BallisticSniper
             weaponButton = CreateButton(menuRoot.transform, "Weapon Selection", "ОРУЖИЕ", new Vector2(0.81f, 0.49f), new Vector2(0.94f, 0.61f), game.CycleWeapon, false);
             weaponButton.GetComponentInChildren<Text>().fontSize = 17;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.67f, 0.36f), new Vector2(0.94f, 0.46f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.2.0  •  Миссии + тренировка  •  Оффлайн";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.3.0  •  Миссии + тренировка  •  Оффлайн";
         }
 
         private void CreateHelp()
