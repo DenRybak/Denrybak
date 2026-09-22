@@ -23,7 +23,7 @@ namespace BallisticSniper.Editor
         public static void Configure()
         {
             PlayerSettings.companyName = "Denis Games";
-            PlayerSettings.productName = "Ballistic Sniper 5.0";
+            PlayerSettings.productName = "Ballistic Sniper 5 Preview";
             PlayerSettings.bundleVersion = "5.0.0-unity";
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
             PlayerSettings.allowedAutorotateToPortrait = false;
@@ -31,7 +31,7 @@ namespace BallisticSniper.Editor
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;
             PlayerSettings.colorSpace = ColorSpace.Linear;
-            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.unity");
+            PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.denis.ballisticsniper.v5preview");
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.bundleVersionCode = 11;
