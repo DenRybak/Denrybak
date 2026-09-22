@@ -609,8 +609,8 @@ namespace BallisticSniper
         {
             Material asphalt = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.15f, 0.17f, 0.19f), 0f, 0.22f, "_MissionAsphalt");
             Material sidewalk = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.48f, 0.50f, 0.48f), 0f, 0.34f, "_MissionSidewalk");
-            Material facadeA = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.56f, 0.52f, 0.46f), 0f, 0.38f, "_MissionFacadeA");
-            Material facadeB = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.22f, 0.26f, 0.31f), 0f, 0.32f, "_MissionFacadeB");
+            Material facadeA = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.43f, 0.43f, 0.40f), 0f, 0.38f, "_MissionFacadeA");
+            Material facadeB = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.19f, 0.21f, 0.24f), 0f, 0.32f, "_MissionFacadeB");
             Material frame = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, new Color(0.16f, 0.19f, 0.20f), 0.46f, 0.36f, "_MissionFrames");
             Material glass = materials.Solid(new Color(0.10f, 0.17f, 0.24f), false, "_MissionWindowDark");
             Material warmWindow = materials.Solid(new Color(0.92f, 0.55f, 0.24f), true, "_MissionWindowGlow");
@@ -638,9 +638,9 @@ namespace BallisticSniper
                     i % 2 == 0 ? facadeB : facadeA, frame, glass, warmWindow, i + operationStage * 17 + 3);
             }
 
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 3; i++)
             {
-                float z = 32f + i * Mathf.Max(32f, (currentRange - 70f) / 5f);
+                float z = 40f + i * Mathf.Max(48f, (currentRange - 85f) / 3f);
                 CreateStreetLamp(-13.7f, z, frame, warmWindow);
                 CreateStreetLamp(13.7f, z + 8f, frame, warmWindow);
             }
@@ -652,7 +652,7 @@ namespace BallisticSniper
                 CreateParkedCar(new Vector3(x, 0.48f, z), i % 2 == 0 ? new Color(0.18f, 0.24f, 0.30f) : new Color(0.43f, 0.17f, 0.12f), frame);
             }
 
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 4; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
                 float z = 42f + (i / 2) * Mathf.Max(24f, (currentRange - 80f) / 7f);
@@ -685,26 +685,22 @@ namespace BallisticSniper
             int seed)
         {
             CreatePrimitive(PrimitiveType.Cube, "Mission Building", stageRoot, centre, size, wall, Quaternion.identity, true);
-            float faceZ = centre.z - size.z * 0.5f - 0.090f;
-            int floors = Mathf.Clamp(Mathf.RoundToInt(size.y / 3.3f), 3, 6);
-            int columns = 4;
+            // Keep distant architecture deliberately broad. Thin coplanar
+            // window frames shimmer badly through a high-magnification scope.
+            float faceZ = centre.z - size.z * 0.5f - 0.18f;
+            int floors = Mathf.Clamp(Mathf.RoundToInt(size.y / 4.0f), 2, 4);
+            const int columns = 3;
             for (int floor = 0; floor < floors; floor++)
             {
                 for (int column = 0; column < columns; column++)
                 {
-                    float x = centre.x + Mathf.Lerp(-size.x * 0.36f, size.x * 0.36f, column / 3f);
-                    float y = centre.y - size.y * 0.5f + 2.1f + floor * 3.05f;
-                    if (y > centre.y + size.y * 0.43f) continue;
+                    float x = centre.x + Mathf.Lerp(-size.x * 0.32f, size.x * 0.32f, column / 2f);
+                    float y = centre.y - size.y * 0.5f + 2.3f + floor * 3.75f;
+                    if (y > centre.y + size.y * 0.40f) continue;
                     bool lit = ((seed + floor * 5 + column * 3) % 7) < 2;
-                    CreatePrimitive(PrimitiveType.Cube, "Window Recess", stageRoot,
-                        new Vector3(x, y, faceZ), new Vector3(2.2f, 1.65f, 0.055f),
+                    CreatePrimitive(PrimitiveType.Cube, "Broad Window Recess", stageRoot,
+                        new Vector3(x, y, faceZ), new Vector3(2.65f, 1.82f, 0.075f),
                         lit ? warmWindow : glass, Quaternion.identity, false);
-                    CreatePrimitive(PrimitiveType.Cube, "Window Top Frame", stageRoot,
-                        new Vector3(x, y + 0.90f, faceZ - 0.07f), new Vector3(2.45f, 0.08f, 0.10f),
-                        frame, Quaternion.identity, false);
-                    CreatePrimitive(PrimitiveType.Cube, "Window Bottom Frame", stageRoot,
-                        new Vector3(x, y - 0.90f, faceZ - 0.07f), new Vector3(2.45f, 0.08f, 0.10f),
-                        frame, Quaternion.identity, false);
                 }
             }
             CreatePrimitive(PrimitiveType.Cube, "Building Roof Cap", stageRoot,
@@ -796,8 +792,8 @@ namespace BallisticSniper
                 CreatePrimitive(PrimitiveType.Cube, "Window Frame R", stageRoot,
                     new Vector3(0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Window Glass", stageRoot,
-                    new Vector3(0f, 1.56f, currentRange - 0.14f), new Vector3(1.32f, 1.04f, 0.010f),
-                    materials.TransparentGlass(new Color(0.42f, 0.62f, 0.74f, 0.12f)), Quaternion.identity, false);
+                    new Vector3(0f, 1.56f, currentRange - 0.24f), new Vector3(1.32f, 1.04f, 0.008f),
+                    materials.TransparentGlass(new Color(0.38f, 0.58f, 0.70f, 0.055f)), Quaternion.identity, false);
                 CreatePrimitive(PrimitiveType.Cube, "Room Floor", stageRoot,
                     new Vector3(0f, -0.08f, currentRange + 2.10f), new Vector3(5.2f, 0.18f, 4f), wood, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Interior Lamp", stageRoot,
@@ -873,7 +869,19 @@ namespace BallisticSniper
                 jacket,
                 trousers);
             humans.Add(actor);
-            if (primary) PrimaryHuman = actor;
+            if (primary)
+            {
+                PrimaryHuman = actor;
+                GameObject readabilityLight = new GameObject("Primary Wardrobe Fill");
+                readabilityLight.transform.SetParent(actor.transform, false);
+                readabilityLight.transform.localPosition = new Vector3(-0.65f, 1.55f, -1.15f);
+                Light fill = readabilityLight.AddComponent<Light>();
+                fill.type = LightType.Point;
+                fill.color = new Color(1.0f, 0.90f, 0.78f);
+                fill.intensity = 0.82f;
+                fill.range = 3.6f;
+                fill.shadows = LightShadows.None;
+            }
         }
 
         private void CreateRangeFurniture(int stage, float range)
