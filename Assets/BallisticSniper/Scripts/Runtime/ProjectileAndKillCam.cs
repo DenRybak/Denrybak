@@ -134,22 +134,23 @@ namespace BallisticSniper
             transform.position = record.Start;
 
             trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.105f, 0.050f, 0.105f);
-            trail.startWidth = 0.0021f;
-            trail.endWidth = 0.000035f;
-            trail.minVertexDistance = 0.0045f;
-            trail.numCornerVertices = 12;
-            trail.numCapVertices = 10;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.120f, 0.060f, 0.120f);
+            trail.widthMultiplier = 0.00070f;
+            trail.minVertexDistance = 0.0035f;
+            trail.numCornerVertices = 14;
+            trail.numCapVertices = 12;
             trail.alignment = LineAlignment.View;
             trail.textureMode = LineTextureMode.Stretch;
             trail.generateLightingData = false;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
             trail.autodestruct = false;
             trail.sharedMaterial = trailMaterial;
             trail.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 1.00f, -0.35f, -0.35f),
-                new Keyframe(0.24f, 0.78f, -0.75f, -0.75f),
-                new Keyframe(0.62f, 0.34f, -0.92f, -0.92f),
-                new Keyframe(1f, 0.00f, -0.18f, 0f));
+                new Keyframe(0f, 1.00f, -0.22f, -0.22f),
+                new Keyframe(0.28f, 0.76f, -0.72f, -0.72f),
+                new Keyframe(0.68f, 0.28f, -0.82f, -0.82f),
+                new Keyframe(1f, 0.00f, -0.16f, 0f));
             Gradient flightGradient = new Gradient();
             flightGradient.SetKeys(
                 new[]
@@ -160,9 +161,9 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.62f, 0f),
-                    new GradientAlphaKey(0.42f, 0.26f),
-                    new GradientAlphaKey(0.17f, 0.66f),
+                    new GradientAlphaKey(0.52f, 0f),
+                    new GradientAlphaKey(0.30f, 0.26f),
+                    new GradientAlphaKey(0.10f, 0.66f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -252,15 +253,16 @@ namespace BallisticSniper
 
             bullet = ProjectileVisualFactory.Create("Kill-cam Realistic Rifle Projectile", bulletMaterial);
             trail = bullet.AddComponent<TrailRenderer>();
-            trail.time = 0.145f;
-            trail.startWidth = 0.00225f;
-            trail.endWidth = 0.000030f;
-            trail.minVertexDistance = 0.0038f;
-            trail.numCornerVertices = 14;
-            trail.numCapVertices = 12;
+            trail.time = 0.165f;
+            trail.widthMultiplier = 0.00085f;
+            trail.minVertexDistance = 0.0030f;
+            trail.numCornerVertices = 16;
+            trail.numCapVertices = 14;
             trail.alignment = LineAlignment.View;
             trail.textureMode = LineTextureMode.Stretch;
             trail.generateLightingData = false;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
             trail.autodestruct = false;
             trail.sharedMaterial = trailMaterial;
             trail.widthCurve = new AnimationCurve(
@@ -279,10 +281,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.66f, 0f),
-                    new GradientAlphaKey(0.46f, 0.28f),
-                    new GradientAlphaKey(0.20f, 0.66f),
-                    new GradientAlphaKey(0.05f, 0.88f),
+                    new GradientAlphaKey(0.54f, 0f),
+                    new GradientAlphaKey(0.34f, 0.28f),
+                    new GradientAlphaKey(0.12f, 0.66f),
+                    new GradientAlphaKey(0.025f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = killGradient;
