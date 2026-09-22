@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
@@ -7,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.2.0";
+        public const string GameVersion = "5.3.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -1021,12 +1022,17 @@ namespace BallisticSniper
             {
                 lastHumanHit = actor;
                 lastHumanWasPrimary = actor.IsPrimary;
-                world.ApplyHumanImpact(
-                    actor,
-                    currentShot.Impact,
-                    currentShot.Impact - currentShot.Start,
-                    SelectedWeapon.RagdollImpulse);
-                PlaySound("hit", 0.92f, actor.IsPrimary ? 0.92f : 1.08f);
+                // A correct target stays posed until the dedicated impact
+                // replay so the hit, particles and ragdoll can be seen cleanly.
+                if (!actor.IsPrimary)
+                {
+                    world.ApplyHumanImpact(
+                        actor,
+                        currentShot.Impact,
+                        currentShot.Impact - currentShot.Start,
+                        SelectedWeapon.RagdollImpulse * 0.72f);
+                    PlaySound("hit", 0.86f, 1.05f);
+                }
                 if (actor.IsPrimary)
                 {
                     operationComplete = true;
@@ -1128,12 +1134,92 @@ namespace BallisticSniper
         private void OnKillCamComplete()
         {
             Time.timeScale = 1f;
+            if (campaignMode == CampaignMode.Operations &&
+                lastHumanWasPrimary &&
+                lastHumanHit != null &&
+                !lastHumanHit.IsRagdolled)
+            {
+                StartCoroutine(PlayPrimaryImpactReplay());
+                return;
+            }
+
             PlaySound(campaignMode == CampaignMode.Operations ? "hit" : "bullseye", 0.80f, 1f);
             if (deferredBonusImpact)
             {
                 world.AddBonusImpact(lastError);
                 deferredBonusImpact = false;
             }
+            SpawnImpactMarker();
+            playerCamera.transform.position = firingCameraPosition;
+            playerCamera.transform.rotation = reviewStartRotation;
+            playerCamera.fieldOfView = reviewStartFov;
+            EnterResult(0f);
+        }
+
+        private IEnumerator PlayPrimaryImpactReplay()
+        {
+            screen = GameScreen.Cinematic;
+            holdingBreath = false;
+
+            Vector3 shotDirection = currentShot.Impact - currentShot.Start;
+            Vector3 approach = shotDirection.sqrMagnitude > 0.0001f ? shotDirection.normalized : Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, approach).normalized;
+            if (side.sqrMagnitude < 0.5f) side = Vector3.right;
+            float sideSign = currentShot.Impact.x >= currentShot.TargetCentre.x ? -1f : 1f;
+
+            Vector3 startCamera =
+                currentShot.Impact - approach * 2.55f +
+                side * 1.15f * sideSign +
+                Vector3.up * 0.48f;
+            playerCamera.transform.position = startCamera;
+            playerCamera.fieldOfView = 27f;
+
+            float preRoll = 0.24f;
+            float preElapsed = 0f;
+            while (preElapsed < preRoll)
+            {
+                preElapsed += Time.unscaledDeltaTime;
+                Vector3 focus = Vector3.Lerp(currentShot.Impact, lastHumanHit.ReplayFocus, 0.62f);
+                playerCamera.transform.rotation = Quaternion.LookRotation(
+                    (focus - playerCamera.transform.position).normalized, Vector3.up);
+                yield return null;
+            }
+
+            Time.timeScale = 0.20f;
+            world.ApplyHumanImpact(
+                lastHumanHit,
+                currentShot.Impact,
+                shotDirection,
+                Mathf.Clamp(SelectedWeapon.RagdollImpulse * 0.66f, 4.8f, 7.8f));
+            PlaySound("hit", 0.95f, 0.82f);
+
+            float replayElapsed = 0f;
+            const float replaySeconds = 2.45f;
+            while (replayElapsed < replaySeconds)
+            {
+                replayElapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(replayElapsed / replaySeconds);
+                if (t > 0.42f) Time.timeScale = 0.34f;
+                if (t > 0.76f) Time.timeScale = 0.48f;
+
+                Vector3 focus = Vector3.Lerp(currentShot.Impact, lastHumanHit.ReplayFocus, 0.78f);
+                Vector3 desired =
+                    startCamera +
+                    side * sideSign * (0.38f * t) +
+                    approach * (0.42f * t) +
+                    Vector3.up * (0.12f * t);
+                playerCamera.transform.position = Vector3.Lerp(playerCamera.transform.position, desired, 0.075f);
+                Vector3 forward = focus - playerCamera.transform.position;
+                if (forward.sqrMagnitude > 0.0001f)
+                    playerCamera.transform.rotation = Quaternion.Slerp(
+                        playerCamera.transform.rotation,
+                        Quaternion.LookRotation(forward.normalized, Vector3.up),
+                        0.12f);
+                playerCamera.fieldOfView = Mathf.Lerp(27f, 23f, t);
+                yield return null;
+            }
+
+            Time.timeScale = 1f;
             SpawnImpactMarker();
             playerCamera.transform.position = firingCameraPosition;
             playerCamera.transform.rotation = reviewStartRotation;
