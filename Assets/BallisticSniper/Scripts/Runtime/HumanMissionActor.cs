@@ -387,13 +387,13 @@ namespace BallisticSniper
             AttachMesh(head, "Eye R", ProceduralHumanMesh.Hand("Eye R Mesh", Vector3.one * 0.034f),
                 new Vector3(0.062f, 0.035f, -0.164f), Quaternion.identity, eye);
 
-            AttachMesh(forearmL, "Hand L", ProceduralHumanMesh.Hand("Hand L Mesh", new Vector3(0.15f, 0.19f, 0.12f)),
+            AttachMesh(forearmL.transform, "Hand L", ProceduralHumanMesh.Hand("Hand L Mesh", new Vector3(0.15f, 0.19f, 0.12f)),
                 new Vector3(0f, -0.245f, 0f), Quaternion.identity, skin);
-            AttachMesh(forearmR, "Hand R", ProceduralHumanMesh.Hand("Hand R Mesh", new Vector3(0.15f, 0.19f, 0.12f)),
+            AttachMesh(forearmR.transform, "Hand R", ProceduralHumanMesh.Hand("Hand R Mesh", new Vector3(0.15f, 0.19f, 0.12f)),
                 new Vector3(0f, -0.245f, 0f), Quaternion.identity, skin);
-            AttachMesh(calfL, "Shoe L", ProceduralHumanMesh.Shoe("Shoe L Mesh", new Vector3(0.22f, 0.14f, 0.34f)),
+            AttachMesh(calfL.transform, "Shoe L", ProceduralHumanMesh.Shoe("Shoe L Mesh", new Vector3(0.22f, 0.14f, 0.34f)),
                 new Vector3(0f, -0.245f, -0.055f), Quaternion.identity, leather);
-            AttachMesh(calfR, "Shoe R", ProceduralHumanMesh.Shoe("Shoe R Mesh", new Vector3(0.22f, 0.14f, 0.34f)),
+            AttachMesh(calfR.transform, "Shoe R", ProceduralHumanMesh.Shoe("Shoe R Mesh", new Vector3(0.22f, 0.14f, 0.34f)),
                 new Vector3(0f, -0.245f, -0.055f), Quaternion.identity, leather);
 
             AttachMesh(chest, "Shirt Front", ProceduralHumanMesh.Torso("Shirt Front Mesh", 0.38f, 0.40f, 0.34f, 0.18f),
