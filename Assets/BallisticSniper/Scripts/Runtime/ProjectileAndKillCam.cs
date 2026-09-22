@@ -14,6 +14,111 @@ namespace BallisticSniper
         public float RangeMetres;
     }
 
+    public static class ProjectileVisualFactory
+    {
+        private static Mesh bulletMesh;
+
+        public static GameObject Create(string name, Material material)
+        {
+            GameObject bullet = new GameObject(name);
+            MeshFilter filter = bullet.AddComponent<MeshFilter>();
+            filter.sharedMesh = BulletMesh();
+            MeshRenderer renderer = bullet.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = true;
+            return bullet;
+        }
+
+        private static Mesh BulletMesh()
+        {
+            if (bulletMesh != null) return bulletMesh;
+
+            const int segments = 24;
+            float[] heights =
+            {
+                -0.0145f, -0.0130f, -0.0105f, 0.0045f,
+                 0.0105f,  0.0145f,  0.0173f, 0.0190f
+            };
+            float[] radii =
+            {
+                0.00335f, 0.00375f, 0.00355f, 0.00355f,
+                0.00340f, 0.00275f, 0.00145f, 0.00016f
+            };
+
+            int ringCount = heights.Length;
+            Vector3[] vertices = new Vector3[ringCount * segments + 2];
+            Vector2[] uvs = new Vector2[vertices.Length];
+            int vi = 0;
+            for (int ring = 0; ring < ringCount; ring++)
+            {
+                float v = ring / (float)(ringCount - 1);
+                for (int s = 0; s < segments; s++)
+                {
+                    float u = s / (float)segments;
+                    float angle = u * Mathf.PI * 2f;
+                    vertices[vi] = new Vector3(
+                        Mathf.Cos(angle) * radii[ring],
+                        heights[ring],
+                        Mathf.Sin(angle) * radii[ring]);
+                    uvs[vi] = new Vector2(u, v);
+                    vi++;
+                }
+            }
+
+            int bottomCentre = vi++;
+            int topCentre = vi;
+            vertices[bottomCentre] = new Vector3(0f, heights[0], 0f);
+            vertices[topCentre] = new Vector3(0f, heights[ringCount - 1], 0f);
+            uvs[bottomCentre] = new Vector2(0.5f, 0f);
+            uvs[topCentre] = new Vector2(0.5f, 1f);
+
+            int[] triangles = new int[(ringCount - 1) * segments * 6 + segments * 6];
+            int ti = 0;
+            for (int ring = 0; ring < ringCount - 1; ring++)
+            {
+                int lower = ring * segments;
+                int upper = (ring + 1) * segments;
+                for (int s = 0; s < segments; s++)
+                {
+                    int n = (s + 1) % segments;
+                    int a = lower + s;
+                    int b = lower + n;
+                    int cc = upper + s;
+                    int d = upper + n;
+                    triangles[ti++] = a;
+                    triangles[ti++] = cc;
+                    triangles[ti++] = d;
+                    triangles[ti++] = a;
+                    triangles[ti++] = d;
+                    triangles[ti++] = b;
+                }
+            }
+
+            for (int s = 0; s < segments; s++)
+            {
+                int n = (s + 1) % segments;
+                triangles[ti++] = bottomCentre;
+                triangles[ti++] = s;
+                triangles[ti++] = n;
+
+                int topRing = (ringCount - 1) * segments;
+                triangles[ti++] = topCentre;
+                triangles[ti++] = topRing + n;
+                triangles[ti++] = topRing + s;
+            }
+
+            bulletMesh = new Mesh { name = "V54 Realistic Rifle Projectile" };
+            bulletMesh.vertices = vertices;
+            bulletMesh.uv = uvs;
+            bulletMesh.triangles = triangles;
+            bulletMesh.RecalculateNormals();
+            bulletMesh.RecalculateTangents();
+            bulletMesh.RecalculateBounds();
+            return bulletMesh;
+        }
+    }
+
     public sealed class ProjectileTracer : MonoBehaviour
     {
         private ShotRecord shot;
@@ -21,44 +126,43 @@ namespace BallisticSniper
         private Action completed;
         private TrailRenderer trail;
 
-        public void Begin(ShotRecord record, Material bulletMaterial, Action onCompleted)
+        public void Begin(ShotRecord record, Material trailMaterial, Action onCompleted)
         {
             shot = record;
             completed = onCompleted;
             age = 0f;
             transform.position = record.Start;
-            transform.localScale = new Vector3(0.0045f, 0.044f, 0.0045f);
-
-            MeshRenderer renderer = GetComponent<MeshRenderer>();
-            if (renderer != null) renderer.sharedMaterial = bulletMaterial;
-            Collider collider = GetComponent<Collider>();
-            if (collider != null) collider.enabled = false;
 
             trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.070f, 0.028f, 0.075f);
-            trail.startWidth = 0.0028f;
-            trail.endWidth = 0.00015f;
-            trail.minVertexDistance = 0.012f;
-            trail.numCornerVertices = 8;
-            trail.numCapVertices = 8;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.105f, 0.050f, 0.105f);
+            trail.startWidth = 0.0021f;
+            trail.endWidth = 0.000035f;
+            trail.minVertexDistance = 0.0045f;
+            trail.numCornerVertices = 12;
+            trail.numCapVertices = 10;
             trail.alignment = LineAlignment.View;
             trail.textureMode = LineTextureMode.Stretch;
             trail.generateLightingData = false;
-            trail.sharedMaterial = bulletMaterial;
-            trail.widthCurve = AnimationCurve.EaseInOut(0f, 0.28f, 1f, 0f);
+            trail.autodestruct = false;
+            trail.sharedMaterial = trailMaterial;
+            trail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 1.00f, -0.35f, -0.35f),
+                new Keyframe(0.24f, 0.78f, -0.75f, -0.75f),
+                new Keyframe(0.62f, 0.34f, -0.92f, -0.92f),
+                new Keyframe(1f, 0.00f, -0.18f, 0f));
             Gradient flightGradient = new Gradient();
             flightGradient.SetKeys(
                 new[]
                 {
-                    new GradientColorKey(new Color(1f, 0.97f, 0.88f), 0f),
-                    new GradientColorKey(new Color(1f, 0.78f, 0.34f), 0.58f),
-                    new GradientColorKey(new Color(0.88f, 0.34f, 0.08f), 1f)
+                    new GradientColorKey(new Color(1.00f, 0.92f, 0.72f), 0f),
+                    new GradientColorKey(new Color(1.00f, 0.61f, 0.18f), 0.48f),
+                    new GradientColorKey(new Color(0.56f, 0.17f, 0.035f), 1f)
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.64f, 0f),
-                    new GradientAlphaKey(0.38f, 0.34f),
-                    new GradientAlphaKey(0.16f, 0.72f),
+                    new GradientAlphaKey(0.62f, 0f),
+                    new GradientAlphaKey(0.42f, 0.26f),
+                    new GradientAlphaKey(0.17f, 0.66f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -107,6 +211,7 @@ namespace BallisticSniper
         private Camera targetCamera;
         private ShotRecord shot;
         private Material bulletMaterial;
+        private Material trailMaterial;
         private GameObject bullet;
         private GameObject impactHighlight;
         private TrailRenderer trail;
@@ -124,10 +229,11 @@ namespace BallisticSniper
         public int Variant => variant;
         public float Progress => duration <= 0f ? 0f : Mathf.Clamp01(elapsed / duration);
 
-        public void Initialize(Camera camera, Material material)
+        public void Initialize(Camera camera, Material projectileMaterial, Material tracerMaterial)
         {
             targetCamera = camera;
-            bulletMaterial = material;
+            bulletMaterial = projectileMaterial;
+            trailMaterial = tracerMaterial;
         }
 
         public void Begin(ShotRecord record, int cameraVariant, Action onCompleted)
@@ -144,49 +250,46 @@ namespace BallisticSniper
             closeUpReported = false;
             impactHoldFrames = 0;
 
-            bullet = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            bullet.name = "Kill-cam .308 Projectile";
-            bullet.transform.localScale = new Vector3(0.0055f, 0.060f, 0.0055f);
-            Collider bulletCollider = bullet.GetComponent<Collider>();
-            if (bulletCollider != null) bulletCollider.enabled = false;
-            MeshRenderer renderer = bullet.GetComponent<MeshRenderer>();
-            if (renderer != null) renderer.sharedMaterial = bulletMaterial;
+            bullet = ProjectileVisualFactory.Create("Kill-cam Realistic Rifle Projectile", bulletMaterial);
             trail = bullet.AddComponent<TrailRenderer>();
-            trail.time = 0.095f;
-            trail.startWidth = 0.0034f;
-            trail.endWidth = 0.00018f;
-            trail.minVertexDistance = 0.010f;
-            trail.numCornerVertices = 10;
-            trail.numCapVertices = 8;
+            trail.time = 0.145f;
+            trail.startWidth = 0.00225f;
+            trail.endWidth = 0.000030f;
+            trail.minVertexDistance = 0.0038f;
+            trail.numCornerVertices = 14;
+            trail.numCapVertices = 12;
             trail.alignment = LineAlignment.View;
             trail.textureMode = LineTextureMode.Stretch;
             trail.generateLightingData = false;
-            trail.sharedMaterial = bulletMaterial;
+            trail.autodestruct = false;
+            trail.sharedMaterial = trailMaterial;
             trail.widthCurve = new AnimationCurve(
-                new Keyframe(0f, 0.32f, 0f, 2.2f),
-                new Keyframe(0.20f, 0.92f, 1.1f, 0.4f),
-                new Keyframe(0.62f, 0.58f, -0.55f, -0.55f),
-                new Keyframe(1f, 0f, -0.8f, 0f));
+                new Keyframe(0f, 1.00f, -0.28f, -0.28f),
+                new Keyframe(0.22f, 0.84f, -0.60f, -0.60f),
+                new Keyframe(0.58f, 0.42f, -0.90f, -0.90f),
+                new Keyframe(0.84f, 0.14f, -0.68f, -0.68f),
+                new Keyframe(1f, 0.00f, -0.20f, 0f));
             Gradient killGradient = new Gradient();
             killGradient.SetKeys(
                 new[]
                 {
-                    new GradientColorKey(new Color(1f, 0.99f, 0.94f), 0f),
-                    new GradientColorKey(new Color(1f, 0.82f, 0.42f), 0.62f),
-                    new GradientColorKey(new Color(0.90f, 0.36f, 0.10f), 1f)
+                    new GradientColorKey(new Color(1.00f, 0.94f, 0.76f), 0f),
+                    new GradientColorKey(new Color(1.00f, 0.62f, 0.18f), 0.46f),
+                    new GradientColorKey(new Color(0.56f, 0.16f, 0.03f), 1f)
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.72f, 0f),
-                    new GradientAlphaKey(0.48f, 0.30f),
-                    new GradientAlphaKey(0.20f, 0.72f),
+                    new GradientAlphaKey(0.66f, 0f),
+                    new GradientAlphaKey(0.46f, 0.28f),
+                    new GradientAlphaKey(0.20f, 0.66f),
+                    new GradientAlphaKey(0.05f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = killGradient;
 
             impactHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             impactHighlight.name = "Kill-cam Impact Point";
-            impactHighlight.transform.localScale = Vector3.one * 0.016f;
+            impactHighlight.transform.localScale = Vector3.one * 0.012f;
             Collider impactCollider = impactHighlight.GetComponent<Collider>();
             if (impactCollider != null) impactCollider.enabled = false;
             MeshRenderer impactRenderer = impactHighlight.GetComponent<MeshRenderer>();
