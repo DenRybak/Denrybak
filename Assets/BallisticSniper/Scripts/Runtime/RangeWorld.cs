@@ -75,10 +75,10 @@ namespace BallisticSniper
             if (escapeActive && escapeVehicle != null)
             {
                 float driveTime = Mathf.Max(0f, clock - escapeStartClock - 0.95f);
-                float distance = Mathf.Min(28f, driveTime * 10.5f);
+                float distance = Mathf.Min(10f, driveTime * 3.4f);
                 Vector3 position = escapeVehicleStart;
-                position.x += distance;
-                position.z += Mathf.Sin(driveTime * 1.15f) * 0.55f;
+                position.x -= distance;
+                position.z += Mathf.Sin(driveTime * 1.15f) * 0.18f;
                 escapeVehicle.position = position;
             }
 
@@ -925,7 +925,10 @@ namespace BallisticSniper
 
             GameObject keyObject = new GameObject("Operation Key Light");
             keyObject.transform.SetParent(stageRoot, false);
-            keyObject.transform.position = new Vector3(-2.2f, operationStage == 2 ? 10f : 5f, currentRange - 3f);
+            keyObject.transform.position = new Vector3(
+                -2.2f,
+                operation.Kind == OperationKind.EscapeVehicle ? 7.5f : operationStage == 2 ? 10f : 5f,
+                currentRange - 3f);
             Light key = keyObject.AddComponent<Light>();
             key.type = LightType.Point;
             key.color = operationStage == 1 ? new Color(1f, 0.70f, 0.42f) : new Color(0.72f, 0.84f, 1f);
