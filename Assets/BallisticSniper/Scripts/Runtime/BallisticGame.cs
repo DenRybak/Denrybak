@@ -8,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.4.2";
+        public const string GameVersion = "5.5.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -113,7 +113,21 @@ namespace BallisticSniper
         private int ActiveShotsPerStage => campaignMode == CampaignMode.Operations
             ? GameRules.OperationDefinitions[stage].Shots
             : GameRules.ShotsPerStage;
-        private int ActiveTargetsPerStage => campaignMode == CampaignMode.Operations ? 1 : GameRules.TargetsPerStage;
+        private int ActiveTargetsPerStage => campaignMode == CampaignMode.Operations
+            ? GameRules.OperationTargetCount(stage)
+            : GameRules.TargetsPerStage;
+
+        private bool ElevatedEscapeOperation =>
+            campaignMode == CampaignMode.Operations &&
+            stage >= 0 &&
+            stage < GameRules.OperationDefinitions.Length &&
+            GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle;
+
+        private float CurrentShooterHeight => ElevatedEscapeOperation ? 24f : CameraHeight;
+        private Vector3 ShooterPosition => new Vector3(0f, CurrentShooterHeight, -0.55f);
+        private float ElevatedBaseDownDegrees => ElevatedEscapeOperation
+            ? Mathf.Atan2(CurrentShooterHeight - 1.28f, Mathf.Max(1f, range + 0.55f)) * Mathf.Rad2Deg
+            : 0f;
 
         private void Awake()
         {
@@ -563,7 +577,7 @@ namespace BallisticSniper
                 TotalShots = totalShots,
                 SuccessfulShots = successfulShots,
                 Operations = campaignMode == CampaignMode.Operations,
-                ExpectedTargets = campaignMode == CampaignMode.Operations ? GameRules.OperationStages : GameRules.CampaignTargets,
+                ExpectedTargets = campaignMode == CampaignMode.Operations ? GameRules.OperationTargets : GameRules.CampaignTargets,
                 ExpectedDestructibles = campaignMode == CampaignMode.Operations ? 0 : GameRules.CampaignDestructibles,
                 MaximumScore = campaignMode == CampaignMode.Operations ? GameRules.OperationMaxScore : GameRules.CampaignMaxScore
             });
@@ -631,7 +645,7 @@ namespace BallisticSniper
             playerCamera.allowHDR = true;
             playerCamera.allowMSAA = true;
             playerCamera.depthTextureMode = DepthTextureMode.Depth;
-            playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
+            playerCamera.transform.position = ShooterPosition;
             playerCamera.gameObject.AddComponent<SceneToneMapper>();
         }
 
@@ -788,7 +802,7 @@ namespace BallisticSniper
             resultShown = false;
             awaitingAimAfterResult = false;
             RemoveImpactMarker();
-            playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
+            playerCamera.transform.position = ShooterPosition;
             ApplyScopeFov();
         }
 
@@ -845,8 +859,8 @@ namespace BallisticSniper
         {
             float yaw = aimYawDegrees + (swayMilX + recoilMilX) * MilToDegrees;
             float pitch = aimPitchDegrees + (swayMilY + recoilMilY) * MilToDegrees;
-            playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
-            playerCamera.transform.rotation = Quaternion.Euler(-pitch, yaw, 0f);
+            playerCamera.transform.position = ShooterPosition;
+            playerCamera.transform.rotation = Quaternion.Euler(ElevatedBaseDownDegrees - pitch, yaw, 0f);
             ApplyScopeFov();
         }
 
@@ -1039,12 +1053,16 @@ namespace BallisticSniper
                 }
                 if (actor.IsPrimary)
                 {
-                    operationComplete = true;
-                    targetsCleared = 1;
+                    targetsCleared++;
                     hitCount++;
                     successfulShots++;
                     lastShotScore = 100;
                     score += lastShotScore;
+
+                    bool escapeMission =
+                        GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle;
+                    operationComplete = !escapeMission ||
+                        targetsCleared >= GameRules.OperationTargetCount(stage);
                 }
                 else
                 {
@@ -1197,6 +1215,12 @@ namespace BallisticSniper
                 Mathf.Clamp(SelectedWeapon.RagdollImpulse * 0.66f, 4.8f, 7.8f));
             PlaySound("hit", 0.95f, 0.82f);
 
+            if (GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle &&
+                !operationComplete)
+            {
+                world.BeginEscapeAfterFirstTarget(lastHumanHit, sceneClock);
+            }
+
             float replayElapsed = 0f;
             const float replaySeconds = 2.45f;
             while (replayElapsed < replaySeconds)
@@ -1266,8 +1290,14 @@ namespace BallisticSniper
             string headline;
             if (campaignMode == CampaignMode.Operations)
             {
+                bool escapeMission =
+                    stage >= 0 &&
+                    stage < GameRules.OperationDefinitions.Length &&
+                    GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle;
                 headline = lastHumanHit != null
-                    ? lastHumanWasPrimary ? "ЦЕЛЬ УСТРАНЕНА" : "ПОСТОРОННИЙ ЗАДЕТ"
+                    ? lastHumanWasPrimary
+                        ? escapeMission && !operationComplete ? "ПЕРВАЯ ЦЕЛЬ УСТРАНЕНА" : "ЦЕЛЬ УСТРАНЕНА"
+                        : "ПОСТОРОННИЙ ЗАДЕТ"
                     : operationFailed ? "ЗАДАНИЕ ПРОВАЛЕНО" : "ПРОМАХ";
             }
             else if (lastBullseye) headline = "ЯБЛОЧКО";
@@ -1282,7 +1312,9 @@ namespace BallisticSniper
             string targetNote = campaignMode == CampaignMode.Operations
                 ? lastHumanHit != null
                     ? lastHumanWasPrimary
-                        ? "ПОДТВЕРЖДЕНИЕ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant() + " • RAGDOLL"
+                        ? (GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle && !operationComplete
+                            ? "ПОДТВЕРЖДЕНИЕ • ВТОРАЯ ЦЕЛЬ УХОДИТ НА АВТО"
+                            : "ПОДТВЕРЖДЕНИЕ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant() + " • RAGDOLL")
                         : "ПОСТОРОННИЙ ЗАДЕТ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant()
                     : world.IsOperationImpactBlocked(currentShot.Impact)
                         ? "ПУЛЯ ОСТАНОВЛЕНА УКРЫТИЕМ"
@@ -1298,8 +1330,13 @@ namespace BallisticSniper
             string actionLabel;
             if (campaignMode == CampaignMode.Operations)
             {
+                bool escapeFollowUp =
+                    GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle &&
+                    targetsCleared == 1 &&
+                    !operationComplete;
                 actionLabel = operationFailed ? "ПОВТОРИТЬ ЗАДАНИЕ" :
                     operationComplete ? stage == ActiveStageCount - 1 ? "ИТОГ ОПЕРАЦИИ" : "СЛЕДУЮЩЕЕ ЗАДАНИЕ" :
+                    escapeFollowUp ? "ПЕРЕХВАТИТЬ АВТО" :
                     stageFinished ? "ПОВТОРИТЬ ЗАДАНИЕ" : "ПОВТОРНЫЙ ВЫСТРЕЛ";
             }
             else
@@ -1419,7 +1456,7 @@ namespace BallisticSniper
 
         private void ResetCameraForBriefing()
         {
-            playerCamera.transform.position = new Vector3(0f, CameraHeight, -0.55f);
+            playerCamera.transform.position = ShooterPosition;
             Vector3 focus = campaignMode == CampaignMode.Operations && world.PrimaryHuman != null
                 ? world.PrimaryHuman.AimCentre
                 : new Vector3(0f, CameraHeight, range);
