@@ -59,6 +59,10 @@ namespace BallisticSniper
         private Vector3 previousKinematicPosition;
         private bool hasPreviousKinematicPosition;
         private float walkCycle;
+        private Transform rideVehicle;
+        private Vector3 rideSeatLocal;
+        private Vector3 rideEntryStart;
+        private float rideStartClock;
 
         private Transform chest;
         private Transform pelvis;
@@ -112,9 +116,34 @@ namespace BallisticSniper
             return actor;
         }
 
+        public void BeginVehicleEscape(Transform vehicle, Vector3 localSeat, float clock)
+        {
+            if (ragdolled || vehicle == null) return;
+            rideVehicle = vehicle;
+            rideSeatLocal = localSeat;
+            rideEntryStart = transform.position;
+            rideStartClock = clock;
+            motion = HumanMotionStyle.Static;
+            hasPreviousKinematicPosition = false;
+        }
+
         public void Tick(float clock)
         {
             if (ragdolled) return;
+
+            if (rideVehicle != null)
+            {
+                float entry = Mathf.Clamp01((clock - rideStartClock) / 0.95f);
+                float eased = entry * entry * (3f - 2f * entry);
+                Vector3 seat = rideVehicle.TransformPoint(rideSeatLocal);
+                Vector3 position = Vector3.Lerp(rideEntryStart, seat, eased);
+                position += Vector3.up * (Mathf.Sin(entry * Mathf.PI) * 0.42f);
+                transform.position = position;
+                facingYaw = rideVehicle.eulerAngles.y;
+                transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
+                AnimatePose(clock, Mathf.Sin(clock * 1.72f + phase), 0f, entry < 1f ? 0.35f : 0f);
+                return;
+            }
 
             Vector3 position = basePosition;
             float gesture = Mathf.Sin(clock * 1.72f + phase);
