@@ -98,10 +98,14 @@ def main() -> int:
     game_data = require("Assets/BallisticSniper/Scripts/Runtime/GameData.cs").read_text(encoding="utf-8")
     if game_data.count("new StageDefinition(") != 5:
         raise AssertionError("campaign must define exactly five stages")
-    if game_data.count("new OperationDefinition(") != 3:
-        raise AssertionError("operations campaign must define exactly three missions")
+    if game_data.count("new OperationDefinition(") != 4:
+        raise AssertionError("operations campaign must define exactly four missions")
     if game_data.count("new WeaponDefinition(") != 3:
         raise AssertionError("weapon selector must define exactly three rifles")
+    if "public const int OperationStages = 4;" not in game_data or "public const int OperationTargets = 5;" not in game_data:
+        raise AssertionError("four-operation/two-target mission totals are missing")
+    if "OperationKind.EscapeVehicle" not in game_data or "ВЫСОТНЫЙ ПЕРЕХВАТ" not in game_data:
+        raise AssertionError("elevated escape vehicle mission is missing")
     names_block = re.search(r"CinematicNames\s*=\s*\{(.*?)\};", game_data, re.DOTALL)
     if not names_block or len(re.findall(r'"[^"]+"', names_block.group(1))) != 14:
         raise AssertionError("cinematic name table must contain 14 variants")
@@ -132,7 +136,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.4.2  •  Миссии + тренировка',
+        '"v5.5.0  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -198,6 +202,7 @@ def main() -> int:
         "walkCycle",
         "ReplayFocus",
         "_PrimaryJacketV53",
+        "BeginVehicleEscape",
     )
     mesh_tokens = ("private static Mesh Lathe", "private static Mesh Ellipsoid", "RecalculateNormals", "RecalculateTangents")
     if any(token not in human_actor for token in human_tokens) or any(token not in human_mesh for token in mesh_tokens):
@@ -223,6 +228,10 @@ def main() -> int:
         "ApplyHumanImpact",
         "SpawnHumanBloodMist",
         "Target Impact Dust",
+        "CreateEscapeVehicle",
+        "BeginEscapeAfterFirstTarget",
+        "High Shooter Tower",
+        "ESCAPE VEHICLE — DARK SEDAN",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
     grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.02f', '"_Sharpness", 0.08f')
@@ -248,7 +257,7 @@ def main() -> int:
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.4.2 thin tracer hotfix is missing")
+        raise AssertionError("v5.5.0 bright thin tracer + escape mission is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -279,10 +288,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.4.2-unity"',
+        'PlayerSettings.bundleVersion = "5.5.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.4.2.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 17",
+        '"Ballistic-Sniper-Unity-v5.5.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 18",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -319,8 +328,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.4.2 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.2 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.5.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.5.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
@@ -386,7 +395,7 @@ def main() -> int:
     if any(token in all_text for token in forbidden_network):
         raise AssertionError("offline guarantee violated by a network API reference")
 
-    print(f"OK: {len(cs_files)} C# files; 5 range stages + 3 operations; 3 weapons; 14 kill-cams; atlas {width}x{height}")
+    print(f"OK: {len(cs_files)} C# files; 5 range stages + 4 operations; 3 weapons; 14 kill-cams; atlas {width}x{height}")
     print(f"OK: visual bullet time 200m={visual_200:.3f}s, 900m={visual_900:.3f}s")
     print("OK: perfect chain-reaction route scores 195 per stage / 975 per campaign")
     print("OK: same-finger breath+aim control and second-finger fire UI are present")
