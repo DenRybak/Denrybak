@@ -1476,7 +1476,10 @@ namespace BallisticSniper
 
         private void UpdateBriefingCamera()
         {
-            Vector3 position = new Vector3(Mathf.Sin(Time.unscaledTime * 0.18f) * 0.35f, CameraHeight + 0.12f, -0.55f);
+            Vector3 position = ShooterPosition + new Vector3(
+                Mathf.Sin(Time.unscaledTime * 0.18f) * 0.35f,
+                0.12f,
+                0f);
             playerCamera.transform.position = position;
             Vector3 focus = campaignMode == CampaignMode.Operations && world.PrimaryHuman != null
                 ? world.PrimaryHuman.AimCentre
