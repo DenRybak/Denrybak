@@ -45,7 +45,7 @@ for check_index in $(seq 1 120); do
     echo "Android startup exception detected before the menu became ready" >&2
     exit 1
   fi
-  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.4.1 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.4.2 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
     menu_ready=1
     break
   fi
@@ -84,7 +84,7 @@ adb shell input tap "$missions_x" "$missions_y"
 briefing_ready=0
 for check_index in $(seq 1 60); do
   adb logcat -d > "$RESULTS_DIR/android-mission-logcat.txt"
-  if grep -Fq "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.1 stage=1" "$RESULTS_DIR/android-mission-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.4.2 stage=1" "$RESULTS_DIR/android-mission-logcat.txt"; then
     briefing_ready=1
     break
   fi
@@ -128,7 +128,7 @@ test -n "$app_pid"
 menu_ready=0
 for check_index in $(seq 1 60); do
   adb logcat -d > "$RESULTS_DIR/android-logcat.txt"
-  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.4.1 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
+  if grep -Fq "BALLISTIC_ANDROID_MENU_READY version=5.4.2 screen=Menu" "$RESULTS_DIR/android-logcat.txt"; then
     menu_ready=1
     break
   fi

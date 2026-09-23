@@ -132,7 +132,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.4.1  •  Миссии + тренировка',
+        '"v5.4.2  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -237,8 +237,8 @@ def main() -> int:
     polish_tokens = (
         "ProjectileVisualFactory",
         'name = "V54 Realistic Rifle Projectile"',
-        "trail.widthMultiplier = 0.00085f",
-        "trail.time = 0.165f",
+        "trail.widthMultiplier = 0.00110f",
+        "trail.time = 0.175f",
         "trail.minVertexDistance = 0.0030f",
         "trail.numCornerVertices = 16",
         "trail.numCapVertices = 14",
@@ -248,7 +248,7 @@ def main() -> int:
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.4.1 thin tracer hotfix is missing")
+        raise AssertionError("v5.4.2 thin tracer hotfix is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -279,10 +279,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.4.1-unity"',
+        'PlayerSettings.bundleVersion = "5.4.2-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.4.1.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 16",
+        '"Ballistic-Sniper-Unity-v5.4.2.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 17",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):

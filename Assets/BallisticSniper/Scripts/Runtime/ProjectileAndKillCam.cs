@@ -134,8 +134,8 @@ namespace BallisticSniper
             transform.position = record.Start;
 
             trail = gameObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.120f, 0.060f, 0.120f);
-            trail.widthMultiplier = 0.00070f;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.125f, 0.065f, 0.125f);
+            trail.widthMultiplier = 0.00095f;
             trail.minVertexDistance = 0.0035f;
             trail.numCornerVertices = 14;
             trail.numCapVertices = 12;
@@ -161,9 +161,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.52f, 0f),
-                    new GradientAlphaKey(0.30f, 0.26f),
-                    new GradientAlphaKey(0.10f, 0.66f),
+                    new GradientAlphaKey(0.78f, 0f),
+                    new GradientAlphaKey(0.50f, 0.24f),
+                    new GradientAlphaKey(0.20f, 0.64f),
+                    new GradientAlphaKey(0.035f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -253,8 +254,8 @@ namespace BallisticSniper
 
             bullet = ProjectileVisualFactory.Create("Kill-cam Realistic Rifle Projectile", bulletMaterial);
             trail = bullet.AddComponent<TrailRenderer>();
-            trail.time = 0.165f;
-            trail.widthMultiplier = 0.00085f;
+            trail.time = 0.175f;
+            trail.widthMultiplier = 0.00110f;
             trail.minVertexDistance = 0.0030f;
             trail.numCornerVertices = 16;
             trail.numCapVertices = 14;
@@ -281,10 +282,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.54f, 0f),
-                    new GradientAlphaKey(0.34f, 0.28f),
-                    new GradientAlphaKey(0.12f, 0.66f),
-                    new GradientAlphaKey(0.025f, 0.88f),
+                    new GradientAlphaKey(0.86f, 0f),
+                    new GradientAlphaKey(0.58f, 0.24f),
+                    new GradientAlphaKey(0.25f, 0.62f),
+                    new GradientAlphaKey(0.055f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = killGradient;
