@@ -238,12 +238,12 @@ namespace BallisticSniper
                 Text label = campaignButtons[i].GetComponentInChildren<Text>();
                 label.color = selected ? Ink : Paper;
                 label.text = (selected ? "✓ " : string.Empty) +
-                    (i == 0 ? "ТРЕНИРОВКА\nполигон" : "МИССИИ\n3 задания");
+                    (i == 0 ? "ТРЕНИРОВКА\nполигон" : "МИССИИ\n" + GameRules.OperationStages + " заданий");
             }
 
             SetButtonLabel(weaponButton, "ОРУЖИЕ  ◀  " + weapon.Name + "  ▶\n" + weapon.Calibre + " • " + weapon.Role);
             menuSpecsText.text = string.Format(CultureInfo.InvariantCulture,
-                "{0}       НАЧ. СКОРОСТЬ  {1:0} м/с       ОПТИКА  FFP ×4–×16",
+                "{0}       НАЧ. СКОРОСТЬ  {1:0} м/с       ОПТИКА  FFP ×8–×100",
                 weapon.Calibre,
                 weapon.MuzzleVelocity);
         }
@@ -270,7 +270,7 @@ namespace BallisticSniper
                 "ДИСТАНЦИЯ\n{0} м\n\nВЕТЕР\n{1:0.0} м/с\n\nЦЕЛЕЙ\n{2}\n\nПАТРОНОВ\n{3}",
                 definition.RangeMetres, Mathf.Abs(wind), GameRules.TargetsPerStage, GameRules.ShotsPerStage);
             briefingSolution.text = string.Format(CultureInfo.InvariantCulture,
-                "{3} • {4}\nTOF  {0:0.00} с    •    ELEV  +{1:0.0} MIL    •    WINDAGE  {2}\nОба барабана: шаг 0,5 MIL    •    FFP ×4–×16",
+                "{3} • {4}\nTOF  {0:0.00} с    •    ELEV  +{1:0.0} MIL    •    WINDAGE  {2}\nОба барабана: шаг 0,5 MIL    •    FFP ×8–×100",
                 solution.TimeSeconds,
                 solution.ElevationMil,
                 FormatWindage((float)-solution.WindMil),
@@ -543,7 +543,7 @@ namespace BallisticSniper
 
             highScoreText = CreateText(menuRoot.transform, "High Score", new Vector2(0.68f, 0.89f), new Vector2(0.94f, 0.96f), 20, TextAnchor.MiddleCenter, GoldLight, FontStyle.Bold);
 
-            startButton = CreateButton(menuRoot.transform, "Missions", "МИССИИ\n3 задания", new Vector2(0.67f, 0.64f), new Vector2(0.94f, 0.86f), game.StartMissions, true);
+            startButton = CreateButton(menuRoot.transform, "Missions", "МИССИИ\n" + GameRules.OperationStages + " заданий", new Vector2(0.67f, 0.64f), new Vector2(0.94f, 0.86f), game.StartMissions, true);
             startBinding = reliableButtons[reliableButtons.Count - 1];
             startButton.GetComponentInChildren<Text>().fontSize = 31;
             campaignButtons[1] = startButton;
@@ -556,7 +556,7 @@ namespace BallisticSniper
             weaponButton = CreateButton(menuRoot.transform, "Weapon Selection", "ОРУЖИЕ", new Vector2(0.81f, 0.49f), new Vector2(0.94f, 0.61f), game.CycleWeapon, false);
             weaponButton.GetComponentInChildren<Text>().fontSize = 17;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.67f, 0.36f), new Vector2(0.94f, 0.46f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.6.0  •  Миссии + тренировка  •  Оффлайн";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.7.0  •  Миссии + тренировка  •  Оффлайн";
         }
 
         private void CreateHelp()
@@ -570,7 +570,7 @@ namespace BallisticSniper
                 "МИССИИ — основной режим: цель среди движущихся людей. ТРЕНИРОВКА — отдельный полигон для баллистики.",
                 "RANGER .308 сбалансирован, VEKTOR 6.5 настильнее, TITAN .338 сильнее воздействует на физический ragdoll.",
                 "Слева ELEV, справа WINDAGE. Зажми ДЫХАНИЕ и веди прицел тем же пальцем; вторым пальцем нажми ОГОНЬ.",
-                "В операциях собеседники перекрывают цель, окно скрывает корпус, а парапет и охрана усложняют финальный выстрел."
+                "В операциях собеседники перекрывают цель, стекло разбивается от попаданий, а финальный офицер находится на 1000 м. Для дальней идентификации доступен зум до 100×."
             };
             for (int i = 0; i < 4; i++)
             {
