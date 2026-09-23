@@ -18,6 +18,10 @@ namespace BallisticSniper
         private int currentStage;
         private float currentRange;
         private CampaignMode currentMode;
+        private Transform escapeVehicle;
+        private Vector3 escapeVehicleStart;
+        private float escapeStartClock;
+        private bool escapeActive;
 
         public IReadOnlyList<TargetActor> Targets => targets;
         public IReadOnlyList<HumanMissionActor> Humans => humans;
@@ -68,6 +72,16 @@ namespace BallisticSniper
 
         public void TickTargets(float clock)
         {
+            if (escapeActive && escapeVehicle != null)
+            {
+                float driveTime = Mathf.Max(0f, clock - escapeStartClock - 0.95f);
+                float distance = Mathf.Min(28f, driveTime * 10.5f);
+                Vector3 position = escapeVehicleStart;
+                position.x += distance;
+                position.z += Mathf.Sin(driveTime * 1.15f) * 0.55f;
+                escapeVehicle.position = position;
+            }
+
             for (int i = 0; i < targets.Count; i++)
             {
                 targets[i].Tick(clock);
@@ -80,6 +94,39 @@ namespace BallisticSniper
             {
                 humans[i].Tick(clock);
             }
+        }
+
+        public bool BeginEscapeAfterFirstTarget(HumanMissionActor hitActor, float clock)
+        {
+            if (currentMode != CampaignMode.Operations ||
+                currentStage < 0 ||
+                currentStage >= GameRules.OperationDefinitions.Length ||
+                GameRules.OperationDefinitions[currentStage].Kind != OperationKind.EscapeVehicle ||
+                escapeVehicle == null)
+            {
+                return false;
+            }
+
+            HumanMissionActor survivor = null;
+            for (int i = 0; i < humans.Count; i++)
+            {
+                HumanMissionActor candidate = humans[i];
+                if (candidate != null &&
+                    candidate != hitActor &&
+                    candidate.IsPrimary &&
+                    !candidate.IsRagdolled)
+                {
+                    survivor = candidate;
+                    break;
+                }
+            }
+
+            if (survivor == null) return false;
+            escapeStartClock = clock;
+            escapeActive = true;
+            survivor.BeginVehicleEscape(escapeVehicle, new Vector3(-0.42f, -0.24f, 0.10f), clock);
+            Debug.Log("BALLISTIC_ESCAPE_STARTED survivor=" + survivor.name + " clock=" + clock.ToString("0.00"));
+            return true;
         }
 
         public void ShowBonusTarget()
@@ -223,6 +270,9 @@ namespace BallisticSniper
             humans.Clear();
             PrimaryHuman = null;
             BonusTarget = null;
+            escapeVehicle = null;
+            escapeActive = false;
+            escapeStartClock = 0f;
             transientObjects.Clear();
         }
 
@@ -667,11 +717,26 @@ namespace BallisticSniper
                     new Vector3(1.55f, 2.15f, 1.45f), vegetation, Quaternion.identity, false);
             }
 
-            // A nearby parapet gives the shooter a physical foreground and
-            // prevents the scene from reading as a flat panorama.
-            CreatePrimitive(PrimitiveType.Cube, "Shooter Rooftop Ledge", stageRoot,
-                new Vector3(0f, 0.48f, 4.4f), new Vector3(5.8f, 0.82f, 0.55f),
-                sidewalk, Quaternion.identity, true);
+            // A nearby foreground structure keeps the firing position physical.
+            // The escape mission puts the shooter on a high rooftop instead of ground level.
+            if (operation.Kind == OperationKind.EscapeVehicle)
+            {
+                CreatePrimitive(PrimitiveType.Cube, "High Shooter Tower", stageRoot,
+                    new Vector3(0f, 10.6f, 4.2f), new Vector3(13.5f, 21.2f, 12.0f),
+                    facadeB, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "High Shooter Roof", stageRoot,
+                    new Vector3(0f, 21.35f, 4.2f), new Vector3(14.2f, 0.34f, 12.7f),
+                    sidewalk, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "High Shooter Parapet", stageRoot,
+                    new Vector3(0f, 22.05f, 9.9f), new Vector3(11.0f, 1.05f, 0.42f),
+                    sidewalk, Quaternion.identity, true);
+            }
+            else
+            {
+                CreatePrimitive(PrimitiveType.Cube, "Shooter Rooftop Ledge", stageRoot,
+                    new Vector3(0f, 0.48f, 4.4f), new Vector3(5.8f, 0.82f, 0.55f),
+                    sidewalk, Quaternion.identity, true);
+            }
 
             RenderSettings.fogStartDistance = currentRange * 0.70f;
             RenderSettings.fogEndDistance = currentRange + 280f;
@@ -810,7 +875,7 @@ namespace BallisticSniper
                 AddHuman("SECURITY", false, new Vector3(1.62f, 0.02f, currentRange + 1.30f),
                     HumanMotionStyle.Guard, 4.70f, new Color(0.10f, 0.13f, 0.16f), new Color(0.07f, 0.08f, 0.10f));
             }
-            else
+            else if (operation.Kind == OperationKind.Rooftop)
             {
                 const float roofY = 5.82f;
                 CreatePrimitive(PrimitiveType.Cube, "Terminal Building", stageRoot,
@@ -838,6 +903,25 @@ namespace BallisticSniper
                 AddHuman("GROUND CREW", false, new Vector3(3.15f, roofY, currentRange + 1.15f),
                     HumanMotionStyle.Guard, 3.65f, new Color(0.25f, 0.29f, 0.33f), new Color(0.09f, 0.10f, 0.12f));
             }
+            else
+            {
+                Material road = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.10f, 0.12f, 0.14f), 0f, 0.22f, "_EscapeRoad");
+                CreatePrimitive(PrimitiveType.Cube, "Escape Cross Street", stageRoot,
+                    new Vector3(7f, -0.10f, currentRange + 0.10f), new Vector3(66f, 0.16f, 9.2f),
+                    road, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Escape Median", stageRoot,
+                    new Vector3(7f, 0.12f, currentRange + 4.45f), new Vector3(66f, 0.28f, 0.52f),
+                    concrete, Quaternion.identity, true);
+
+                escapeVehicle = CreateEscapeVehicle(new Vector3(4.8f, 0.48f, currentRange + 0.05f), steel);
+                escapeVehicleStart = escapeVehicle.position;
+                escapeActive = false;
+
+                AddHuman("TARGET ALPHA", true, new Vector3(-2.20f, 0.04f, currentRange - 0.10f),
+                    HumanMotionStyle.TargetPatrol, 0.35f, new Color(0.62f, 0.10f, 0.08f), new Color(0.10f, 0.11f, 0.13f));
+                AddHuman("TARGET BRAVO", true, new Vector3(1.10f, 0.04f, currentRange + 0.18f),
+                    HumanMotionStyle.Conversation, 2.10f, new Color(0.12f, 0.32f, 0.62f), new Color(0.09f, 0.10f, 0.12f));
+            }
 
             GameObject keyObject = new GameObject("Operation Key Light");
             keyObject.transform.SetParent(stageRoot, false);
@@ -850,7 +934,47 @@ namespace BallisticSniper
             key.shadows = LightShadows.None;
         }
 
-        private void AddHuman(
+        private Transform CreateEscapeVehicle(Vector3 worldPosition, Material dark)
+        {
+            Transform root = new GameObject("ESCAPE VEHICLE — DARK SEDAN").transform;
+            root.SetParent(stageRoot, false);
+            root.position = worldPosition;
+            root.rotation = Quaternion.Euler(0f, 90f, 0f);
+
+            Material body = materials.Get(
+                MaterialLibrary.Surface.ScratchedBlackSteel,
+                new Color(0.11f, 0.14f, 0.18f),
+                0.74f,
+                0.52f,
+                "_EscapeVehicleBody");
+            Material glass = materials.TransparentGlass(new Color(0.22f, 0.42f, 0.55f, 0.22f));
+
+            CreatePrimitive(PrimitiveType.Cube, "Escape Car Chassis", root, new Vector3(0f, 0f, 0f),
+                new Vector3(1.92f, 0.48f, 4.45f), body, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Escape Car Lower Cabin", root, new Vector3(0f, 0.48f, 0.12f),
+                new Vector3(1.70f, 0.56f, 2.30f), glass, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Escape Car Roof", root, new Vector3(0f, 0.92f, 0.10f),
+                new Vector3(1.72f, 0.09f, 2.28f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Escape Car Front Pillar", root, new Vector3(0f, 0.56f, 1.15f),
+                new Vector3(1.74f, 0.10f, 0.12f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Escape Car Rear Pillar", root, new Vector3(0f, 0.56f, -1.02f),
+                new Vector3(1.74f, 0.10f, 0.12f), body, Quaternion.identity, false);
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int end = -1; end <= 1; end += 2)
+                {
+                    CreatePrimitive(PrimitiveType.Cylinder, "Escape Car Wheel", root,
+                        new Vector3(side * 0.98f, -0.18f, end * 1.42f),
+                        new Vector3(0.31f, 0.16f, 0.31f), dark,
+                        Quaternion.Euler(0f, 0f, 90f), false);
+                }
+            }
+
+            return root;
+        }
+
+        private HumanMissionActor AddHuman(
             string characterName,
             bool primary,
             Vector3 position,
@@ -873,7 +997,7 @@ namespace BallisticSniper
             humans.Add(actor);
             if (primary)
             {
-                PrimaryHuman = actor;
+                if (PrimaryHuman == null) PrimaryHuman = actor;
                 GameObject readabilityLight = new GameObject("Primary Wardrobe Fill");
                 readabilityLight.transform.SetParent(actor.transform, false);
                 readabilityLight.transform.localPosition = new Vector3(-0.65f, 1.55f, -1.15f);
@@ -884,6 +1008,7 @@ namespace BallisticSniper
                 fill.range = 3.6f;
                 fill.shadows = LightShadows.None;
             }
+            return actor;
         }
 
         private void CreateRangeFurniture(int stage, float range)
