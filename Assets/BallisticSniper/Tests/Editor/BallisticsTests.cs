@@ -27,7 +27,10 @@ namespace BallisticSniper.Tests
         public void CampaignContentIsComplete()
         {
             Assert.That(GameRules.StageDefinitions.Length, Is.EqualTo(5));
-            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(4));
+            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(5));
+            Assert.That(GameRules.OperationDefinitions[4].Kind, Is.EqualTo(OperationKind.OfficerBriefing));
+            Assert.That(GameRules.OperationDefinitions[4].RangeMetres, Is.EqualTo(1000));
+            Assert.That(GameRules.ZoomLevels[GameRules.ZoomLevels.Length - 1], Is.EqualTo(100));
             Assert.That(GameRules.Weapons.Length, Is.EqualTo(3));
             Assert.That(GameRules.CinematicNames.Length, Is.EqualTo(14));
             foreach (StageDefinition stage in GameRules.StageDefinitions)
