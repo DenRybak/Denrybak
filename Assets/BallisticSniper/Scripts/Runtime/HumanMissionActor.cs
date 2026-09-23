@@ -136,9 +136,9 @@ namespace BallisticSniper
                 float entry = Mathf.Clamp01((clock - rideStartClock) / 0.95f);
                 float eased = entry * entry * (3f - 2f * entry);
                 Vector3 seat = rideVehicle.TransformPoint(rideSeatLocal);
-                Vector3 position = Vector3.Lerp(rideEntryStart, seat, eased);
-                position += Vector3.up * (Mathf.Sin(entry * Mathf.PI) * 0.42f);
-                transform.position = position;
+                Vector3 ridePosition = Vector3.Lerp(rideEntryStart, seat, eased);
+                ridePosition += Vector3.up * (Mathf.Sin(entry * Mathf.PI) * 0.42f);
+                transform.position = ridePosition;
                 facingYaw = rideVehicle.eulerAngles.y;
                 transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
                 AnimatePose(clock, Mathf.Sin(clock * 1.72f + phase), 0f, entry < 1f ? 0.35f : 0f);
