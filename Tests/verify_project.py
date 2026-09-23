@@ -98,22 +98,26 @@ def main() -> int:
     game_data = require("Assets/BallisticSniper/Scripts/Runtime/GameData.cs").read_text(encoding="utf-8")
     if game_data.count("new StageDefinition(") != 5:
         raise AssertionError("campaign must define exactly five stages")
-    if game_data.count("new OperationDefinition(") != 4:
-        raise AssertionError("operations campaign must define exactly four missions")
+    if game_data.count("new OperationDefinition(") != 5:
+        raise AssertionError("operations campaign must define exactly five missions")
     if game_data.count("new WeaponDefinition(") != 3:
         raise AssertionError("weapon selector must define exactly three rifles")
-    if ("public const int OperationStages = 4;" not in game_data or
-            "public const int OperationTargets = 5;" not in game_data or
-            "public const int OperationMaxScore = 500;" not in game_data):
-        raise AssertionError("four-operation/two-target mission totals are missing")
-    if "OperationKind.EscapeVehicle" not in game_data or "ВЫСОТНЫЙ ПЕРЕХВАТ" not in game_data:
-        raise AssertionError("elevated escape vehicle mission is missing")
+    if ("public const int OperationStages = 5;" not in game_data or
+            "public const int OperationTargets = 6;" not in game_data or
+            "public const int OperationMaxScore = 600;" not in game_data):
+        raise AssertionError("five-operation mission totals are missing")
+    if ("OperationKind.EscapeVehicle" not in game_data or
+            "ВЫСОТНЫЙ ПЕРЕХВАТ" not in game_data or
+            "OperationKind.OfficerBriefing" not in game_data or
+            "КОМАНДНЫЙ БРИФИНГ" not in game_data or
+            "1000," not in game_data):
+        raise AssertionError("escape or 1000 m officer mission is missing")
     names_block = re.search(r"CinematicNames\s*=\s*\{(.*?)\};", game_data, re.DOTALL)
     if not names_block or len(re.findall(r'"[^"]+"', names_block.group(1))) != 14:
         raise AssertionError("cinematic name table must contain 14 variants")
 
-    if "ZoomLevels = { 8, 16, 24, 36, 50 }" not in game_data:
-        raise AssertionError("v5.3 high-magnification sniper optic is missing")
+    if "ZoomLevels = { 8, 16, 24, 36, 50, 75, 100 }" not in game_data:
+        raise AssertionError("100x high-magnification sniper optic is missing")
 
     kill_cam = require("Assets/BallisticSniper/Scripts/Runtime/ProjectileAndKillCam.cs").read_text(encoding="utf-8")
     if ("int profile = variant % 3;" not in kill_cam or
@@ -138,7 +142,9 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.6.0  •  Миссии + тренировка',
+        '"v5.7.0  •  Миссии + тренировка',
+        '"МИССИИ\\n" + GameRules.OperationStages + " заданий"',
+        "ОПТИКА  FFP ×8–×100",
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -240,6 +246,10 @@ def main() -> int:
         "Vehicle Safety Glass Shard",
         "Driver Door Hinge",
         "EscapeTargetLost",
+        "OperationKind.OfficerBriefing",
+        "OFFICER SOKOLOV",
+        "Officer Peaked Cap Crown",
+        "Command Yard",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
     grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.02f', '"_Sharpness", 0.08f')
@@ -268,7 +278,7 @@ def main() -> int:
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.6.0 bright thin tracer + escape mission is missing")
+        raise AssertionError("v5.7.0 bright thin tracer + escape mission is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -285,6 +295,7 @@ def main() -> int:
         "runtime-operation-v5.0.0.png",
         "OperationsBuildCharactersAndReleaseARealJointedRagdoll",
         "EscapeOperationHasTwoTargetsAndMovingVehiclePassenger",
+        "OfficerBriefingIsFifthMissionAt1000MetresAndOpticReaches100x",
         "CharacterJoint",
         "ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred",
         "ResultActionOverlapsFireForTests",
@@ -300,10 +311,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.6.0-unity"',
+        'PlayerSettings.bundleVersion = "5.7.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.6.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 19",
+        '"Ballistic-Sniper-Unity-v5.7.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 20",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -345,8 +356,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.6.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.6.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.7.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.7.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
