@@ -345,8 +345,8 @@ def main() -> int:
     android_test_tokens = (
         "adb install -r",
         "adb shell input tap",
-        "BALLISTIC_ANDROID_MENU_READY version=5.5.0 screen=Menu",
-        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.5.0 stage=1",
+        "BALLISTIC_ANDROID_MENU_READY version=5.6.0 screen=Menu",
+        "BALLISTIC_ANDROID_MISSION_BRIEFING version=5.6.0 stage=1",
         "BALLISTIC_ANDROID_MISSION_START stage=1 humans=5",
         "android-mission-briefing.png",
         "android-mission-gameplay.png",
