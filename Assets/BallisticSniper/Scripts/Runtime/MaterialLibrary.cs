@@ -170,7 +170,7 @@ namespace BallisticSniper
 
         public Material TransparentGlass(Color tint)
         {
-            const string key = "transparent_glass";
+            string key = "transparent_glass|" + ColorUtility.ToHtmlStringRGBA(tint);
             if (materials.TryGetValue(key, out Material cached)) return cached;
 
             Material material = new Material(transparentShader) { name = "MAT_Glass" };

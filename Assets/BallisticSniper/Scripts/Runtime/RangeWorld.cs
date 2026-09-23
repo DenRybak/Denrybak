@@ -162,41 +162,54 @@ namespace BallisticSniper
 
             if (currentStage == 1 && hotelWindowGlass != null && hotelWindowGlass.activeSelf)
             {
-                if (Mathf.Abs(impactPoint.x) <= 0.70f &&
-                    impactPoint.y >= 1.00f &&
-                    impactPoint.y <= 2.12f)
+                Renderer hotelRenderer = hotelWindowGlass.GetComponent<Renderer>();
+                if (hotelRenderer != null)
                 {
-                    ShatterGlassPanel(hotelWindowGlass, impactPoint, "Hotel Window Shard");
-                    return true;
+                    Bounds bounds = hotelRenderer.bounds;
+                    float marginX = 0.055f;
+                    float marginY = 0.055f;
+                    bool inside =
+                        Mathf.Abs(impactPoint.x - bounds.center.x) <= bounds.extents.x + marginX &&
+                        Mathf.Abs(impactPoint.y - bounds.center.y) <= bounds.extents.y + marginY;
+                    if (inside)
+                    {
+                        ShatterGlassPanel(hotelWindowGlass, impactPoint, "Hotel Window Shard");
+                        return true;
+                    }
                 }
             }
 
-            if (currentStage == 3 && escapeVehicle != null)
+            // All operation cars now register their glass.  This includes the
+            // escape sedan as well as parked street cars, so a visible pane
+            // always reacts when the shot lands on it.
+            GameObject best = null;
+            float bestScore = float.MaxValue;
+            for (int i = 0; i < escapeGlassPanels.Count; i++)
             {
-                GameObject best = null;
-                float bestScore = float.MaxValue;
-                for (int i = 0; i < escapeGlassPanels.Count; i++)
-                {
-                    GameObject panel = escapeGlassPanels[i];
-                    if (panel == null || !panel.activeSelf) continue;
-                    Renderer renderer = panel.GetComponent<Renderer>();
-                    if (renderer == null) continue;
-                    Bounds bounds = renderer.bounds;
-                    float dx = Mathf.Max(0f, Mathf.Abs(impactPoint.x - bounds.center.x) - bounds.extents.x);
-                    float dy = Mathf.Max(0f, Mathf.Abs(impactPoint.y - bounds.center.y) - bounds.extents.y);
-                    float score = dx * dx + dy * dy;
-                    if (score < bestScore && score <= 0.075f)
-                    {
-                        bestScore = score;
-                        best = panel;
-                    }
-                }
+                GameObject panel = escapeGlassPanels[i];
+                if (panel == null || !panel.activeSelf) continue;
+                Renderer renderer = panel.GetComponent<Renderer>();
+                if (renderer == null) continue;
 
-                if (best != null)
+                Bounds bounds = renderer.bounds;
+                float extentX = Mathf.Max(0.035f, bounds.extents.x) + 0.11f;
+                float extentY = Mathf.Max(0.035f, bounds.extents.y) + 0.09f;
+                float nx = Mathf.Abs(impactPoint.x - bounds.center.x) / extentX;
+                float ny = Mathf.Abs(impactPoint.y - bounds.center.y) / extentY;
+                if (nx > 1f || ny > 1f) continue;
+
+                float score = nx * nx + ny * ny;
+                if (score < bestScore)
                 {
-                    ShatterGlassPanel(best, impactPoint, "Vehicle Safety Glass Shard");
-                    return true;
+                    bestScore = score;
+                    best = panel;
                 }
+            }
+
+            if (best != null)
+            {
+                ShatterGlassPanel(best, impactPoint, "Vehicle Safety Glass Shard");
+                return true;
             }
 
             return false;
@@ -213,8 +226,13 @@ namespace BallisticSniper
             }
 
             Bounds bounds = renderer.bounds;
-            Material shardMaterial = renderer.sharedMaterial;
             panel.SetActive(false);
+
+            // Use a brighter, separately cached shard material.  The previous
+            // version reused the almost invisible intact-glass alpha, so the
+            // pane disappeared but the player could not read the break.
+            Material shardMaterial = materials.TransparentGlass(
+                new Color(0.72f, 0.90f, 1.00f, 0.52f));
 
             Random.State oldState = Random.state;
             Random.InitState(
@@ -222,30 +240,50 @@ namespace BallisticSniper
                 Mathf.RoundToInt(impactPoint.x * 97f) +
                 Mathf.RoundToInt(impactPoint.y * 131f));
 
-            for (int i = 0; i < 24; i++)
+            int shardCount = Mathf.Clamp(
+                Mathf.RoundToInt((bounds.size.x + bounds.size.y) * 18f),
+                34,
+                54);
+
+            for (int i = 0; i < shardCount; i++)
             {
                 Vector3 offset = new Vector3(
                     Random.Range(-bounds.extents.x, bounds.extents.x),
                     Random.Range(-bounds.extents.y, bounds.extents.y),
-                    Random.Range(-0.018f, 0.018f));
-                float size = Random.Range(0.028f, 0.075f);
+                    Random.Range(-0.024f, 0.024f));
+                float size = Random.Range(0.040f, 0.105f);
                 GameObject shard = CreatePrimitive(
                     PrimitiveType.Cube, shardName, stageRoot,
                     bounds.center + offset,
-                    new Vector3(size, size * Random.Range(0.45f, 1.35f), 0.010f),
+                    new Vector3(size, size * Random.Range(0.42f, 1.55f), Random.Range(0.008f, 0.018f)),
                     shardMaterial, Random.rotation, false);
                 Rigidbody body = shard.AddComponent<Rigidbody>();
-                body.mass = Random.Range(0.008f, 0.025f);
+                body.mass = Random.Range(0.010f, 0.032f);
                 body.useGravity = true;
-                body.velocity = new Vector3(
-                    Random.Range(-1.8f, 1.8f),
-                    Random.Range(0.7f, 3.0f),
-                    Random.Range(-4.8f, -2.0f));
-                body.angularVelocity = Random.insideUnitSphere * 12f;
+
+                Vector3 away = (bounds.center + offset - impactPoint);
+                away.z = -Mathf.Abs(away.z) - 0.35f;
+                if (away.sqrMagnitude < 0.01f) away = new Vector3(Random.Range(-0.3f, 0.3f), 0.2f, -1f);
+                away.Normalize();
+                body.velocity =
+                    away * Random.Range(2.2f, 5.4f) +
+                    new Vector3(Random.Range(-0.8f, 0.8f), Random.Range(0.9f, 3.4f), Random.Range(-2.2f, -0.6f));
+                body.angularVelocity = Random.insideUnitSphere * 18f;
+
                 TimedDestroy timed = shard.AddComponent<TimedDestroy>();
-                timed.Lifetime = Random.Range(1.8f, 3.0f);
+                timed.Lifetime = Random.Range(2.0f, 3.6f);
                 transientObjects.Add(shard);
             }
+
+            GameObject flash = CreatePrimitive(
+                PrimitiveType.Cylinder, "Glass Impact Spark", stageRoot,
+                impactPoint + new Vector3(0f, 0f, -0.035f),
+                new Vector3(0.15f, 0.006f, 0.15f),
+                materials.Solid(new Color(0.78f, 0.94f, 1f), true, "_GlassImpactFlashV57"),
+                Quaternion.Euler(90f, 0f, 0f), false);
+            TimedDestroy flashDestroy = flash.AddComponent<TimedDestroy>();
+            flashDestroy.Lifetime = 0.14f;
+            transientObjects.Add(flash);
 
             Random.state = oldState;
         }
@@ -801,6 +839,8 @@ namespace BallisticSniper
             Material glass = materials.Solid(new Color(0.10f, 0.17f, 0.24f), false, "_MissionWindowDark");
             Material warmWindow = materials.Solid(new Color(0.92f, 0.55f, 0.24f), true, "_MissionWindowGlow");
             Material vegetation = materials.Get(MaterialLibrary.Surface.Grass, new Color(0.20f, 0.34f, 0.22f), 0f, 0.28f, "_MissionVegetation");
+            Material roadPaint = materials.Solid(new Color(0.76f, 0.76f, 0.70f), false, "_MissionRoadPaintV57");
+            Material streetWood = materials.Get(MaterialLibrary.Surface.Planks, new Color(0.29f, 0.20f, 0.13f), 0f, 0.30f, "_MissionStreetWoodV57");
 
             CreatePrimitive(PrimitiveType.Cube, "Mission Road", stageRoot,
                 new Vector3(0f, -0.22f, currentRange * 0.50f),
@@ -811,6 +851,33 @@ namespace BallisticSniper
             CreatePrimitive(PrimitiveType.Cube, "Right Sidewalk", stageRoot,
                 new Vector3(18f, -0.06f, currentRange * 0.50f),
                 new Vector3(6f, 0.18f, currentRange + 65f), sidewalk, Quaternion.identity, true);
+
+            CreatePrimitive(PrimitiveType.Cube, "Left Granite Curb", stageRoot,
+                new Vector3(-14.92f, 0.02f, currentRange * 0.50f),
+                new Vector3(0.24f, 0.28f, currentRange + 65f), sidewalk, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Right Granite Curb", stageRoot,
+                new Vector3(14.92f, 0.02f, currentRange * 0.50f),
+                new Vector3(0.24f, 0.28f, currentRange + 65f), sidewalk, Quaternion.identity, false);
+
+            for (int i = 0; i < 13; i++)
+            {
+                float z = 20f + i * Mathf.Max(22f, (currentRange - 30f) / 12f);
+                CreatePrimitive(PrimitiveType.Cube, "Lane Dash L", stageRoot,
+                    new Vector3(-5.0f, -0.065f, z), new Vector3(0.16f, 0.015f, 5.4f),
+                    roadPaint, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Lane Dash R", stageRoot,
+                    new Vector3(5.0f, -0.065f, z + 8f), new Vector3(0.16f, 0.015f, 5.4f),
+                    roadPaint, Quaternion.identity, false);
+            }
+
+            float crossingZ = Mathf.Max(34f, currentRange - 18f);
+            for (int i = 0; i < 8; i++)
+            {
+                float x = -10.5f + i * 3.0f;
+                CreatePrimitive(PrimitiveType.Cube, "Crosswalk Stripe", stageRoot,
+                    new Vector3(x, -0.06f, crossingZ), new Vector3(1.55f, 0.018f, 0.72f),
+                    roadPaint, Quaternion.identity, false);
+            }
 
             int buildingPairs = operationStage == 2 ? 4 : 5;
             for (int i = 0; i < buildingPairs; i++)
@@ -838,17 +905,33 @@ namespace BallisticSniper
                 CreateParkedCar(new Vector3(x, 0.48f, z), i % 2 == 0 ? new Color(0.18f, 0.24f, 0.30f) : new Color(0.43f, 0.17f, 0.12f), frame);
             }
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 6; i++)
             {
                 float side = i % 2 == 0 ? -1f : 1f;
-                float z = 42f + (i / 2) * Mathf.Max(24f, (currentRange - 80f) / 7f);
+                float z = 42f + (i / 2) * Mathf.Max(38f, (currentRange - 90f) / 4f);
                 Transform tree = new GameObject("Mission Street Tree").transform;
                 tree.SetParent(stageRoot, false);
                 tree.position = new Vector3(side * 20.5f, 0f, z);
                 CreatePrimitive(PrimitiveType.Cylinder, "Tree Trunk", tree, new Vector3(0f, 1.6f, 0f),
                     new Vector3(0.16f, 1.6f, 0.16f), frame, Quaternion.identity, false);
-                CreatePrimitive(PrimitiveType.Sphere, "Tree Crown", tree, new Vector3(0f, 4.0f, 0f),
-                    new Vector3(1.55f, 2.15f, 1.45f), vegetation, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Sphere, "Tree Crown Lower", tree, new Vector3(0f, 3.65f, 0f),
+                    new Vector3(1.45f, 1.45f, 1.35f), vegetation, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Sphere, "Tree Crown Upper", tree, new Vector3(0.18f, 4.65f, 0.08f),
+                    new Vector3(1.18f, 1.35f, 1.10f), vegetation, Quaternion.identity, false);
+
+                float furnitureX = side * 17.45f;
+                CreatePrimitive(PrimitiveType.Cube, "Street Bench Seat", stageRoot,
+                    new Vector3(furnitureX, 0.48f, z + 7.0f), new Vector3(2.1f, 0.16f, 0.48f),
+                    streetWood, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Street Bench Back", stageRoot,
+                    new Vector3(furnitureX + side * 0.18f, 0.92f, z + 7.0f), new Vector3(0.12f, 0.82f, 2.1f),
+                    streetWood, Quaternion.Euler(0f, 90f, 0f), false);
+                CreatePrimitive(PrimitiveType.Cube, "Stone Planter", stageRoot,
+                    new Vector3(side * 19.35f, 0.34f, z - 6.2f), new Vector3(1.45f, 0.68f, 1.45f),
+                    sidewalk, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Sphere, "Planter Shrub", stageRoot,
+                    new Vector3(side * 19.35f, 1.25f, z - 6.2f), new Vector3(1.10f, 1.05f, 1.10f),
+                    vegetation, Quaternion.identity, false);
             }
 
             // A nearby foreground structure keeps the firing position physical.
@@ -886,27 +969,69 @@ namespace BallisticSniper
             int seed)
         {
             CreatePrimitive(PrimitiveType.Cube, "Mission Building", stageRoot, centre, size, wall, Quaternion.identity, true);
-            // Keep distant architecture deliberately broad. Thin coplanar
-            // window frames shimmer badly through a high-magnification scope.
-            float faceZ = centre.z - size.z * 0.5f - 0.18f;
-            int floors = Mathf.Clamp(Mathf.RoundToInt(size.y / 4.0f), 2, 4);
-            const int columns = 3;
+
+            float bottom = centre.y - size.y * 0.5f;
+            float faceZ = centre.z - size.z * 0.5f - 0.19f;
+            CreatePrimitive(PrimitiveType.Cube, "Building Stone Plinth", stageRoot,
+                new Vector3(centre.x, bottom + 0.35f, centre.z),
+                new Vector3(size.x + 0.35f, 0.70f, size.z + 0.35f), frame, Quaternion.identity, false);
+
+            int floors = Mathf.Clamp(Mathf.RoundToInt(size.y / 3.55f), 3, 5);
+            int columns = size.x >= 18f ? 4 : 3;
+            float floorStep = (size.y - 2.5f) / Mathf.Max(1, floors);
+
             for (int floor = 0; floor < floors; floor++)
             {
+                float y = bottom + 2.05f + floor * floorStep;
+                if (y > centre.y + size.y * 0.42f) continue;
+
                 for (int column = 0; column < columns; column++)
                 {
-                    float x = centre.x + Mathf.Lerp(-size.x * 0.32f, size.x * 0.32f, column / 2f);
-                    float y = centre.y - size.y * 0.5f + 2.3f + floor * 3.75f;
-                    if (y > centre.y + size.y * 0.40f) continue;
-                    bool lit = ((seed + floor * 5 + column * 3) % 7) < 2;
-                    CreatePrimitive(PrimitiveType.Cube, "Broad Window Recess", stageRoot,
-                        new Vector3(x, y, faceZ), new Vector3(2.65f, 1.82f, 0.075f),
-                        lit ? warmWindow : glass, Quaternion.identity, false);
+                    float lerp = columns == 1 ? 0.5f : column / (float)(columns - 1);
+                    float x = centre.x + Mathf.Lerp(-size.x * 0.36f, size.x * 0.36f, lerp);
+                    bool lit = ((seed + floor * 5 + column * 3) % 8) < 3;
+                    Material pane = lit ? warmWindow : glass;
+
+                    CreatePrimitive(PrimitiveType.Cube, "Window Recess", stageRoot,
+                        new Vector3(x, y, faceZ), new Vector3(2.20f, 1.55f, 0.075f),
+                        pane, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Window Sill", stageRoot,
+                        new Vector3(x, y - 0.87f, faceZ - 0.035f), new Vector3(2.45f, 0.10f, 0.16f),
+                        frame, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Window Lintel", stageRoot,
+                        new Vector3(x, y + 0.87f, faceZ - 0.035f), new Vector3(2.45f, 0.10f, 0.16f),
+                        frame, Quaternion.identity, false);
+                }
+
+                if (floor > 0)
+                {
+                    CreatePrimitive(PrimitiveType.Cube, "Facade Floor Band", stageRoot,
+                        new Vector3(centre.x, y - floorStep * 0.51f, faceZ - 0.03f),
+                        new Vector3(size.x * 0.94f, 0.11f, 0.18f), frame, Quaternion.identity, false);
                 }
             }
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                CreatePrimitive(PrimitiveType.Cube, "Facade Corner Pier", stageRoot,
+                    new Vector3(centre.x + side * size.x * 0.45f, centre.y, faceZ + 0.01f),
+                    new Vector3(0.42f, size.y * 0.93f, 0.20f), frame, Quaternion.identity, false);
+            }
+
+            float entryX = centre.x + ((seed & 1) == 0 ? -size.x * 0.24f : size.x * 0.24f);
+            CreatePrimitive(PrimitiveType.Cube, "Building Entrance", stageRoot,
+                new Vector3(entryX, bottom + 1.25f, faceZ - 0.04f),
+                new Vector3(1.55f, 2.50f, 0.11f), glass, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Entrance Canopy", stageRoot,
+                new Vector3(entryX, bottom + 2.62f, faceZ - 0.50f),
+                new Vector3(2.65f, 0.14f, 0.95f), frame, Quaternion.identity, false);
+
             CreatePrimitive(PrimitiveType.Cube, "Building Roof Cap", stageRoot,
                 new Vector3(centre.x, centre.y + size.y * 0.5f + 0.20f, centre.z),
                 new Vector3(size.x + 0.7f, 0.32f, size.z + 0.7f), frame, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Rooftop Utility Box", stageRoot,
+                new Vector3(centre.x + (((seed % 3) - 1) * 2.1f), centre.y + size.y * 0.5f + 0.78f, centre.z + 1.1f),
+                new Vector3(2.4f, 1.15f, 2.0f), frame, Quaternion.identity, false);
         }
 
         private void CreateStreetLamp(float x, float z, Material metal, Material glow)
@@ -919,21 +1044,78 @@ namespace BallisticSniper
 
         private void CreateParkedCar(Vector3 centre, Color bodyTint, Material dark)
         {
-            Material body = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, bodyTint, 0.55f, 0.38f, "_MissionCar");
-            Material glass = materials.Solid(new Color(0.10f, 0.18f, 0.24f), false, "_MissionCarGlass");
-            CreatePrimitive(PrimitiveType.Cube, "Car Chassis", stageRoot, centre,
-                new Vector3(1.85f, 0.52f, 4.25f), body, Quaternion.identity, true);
-            CreatePrimitive(PrimitiveType.Cube, "Car Cabin", stageRoot, centre + new Vector3(0f, 0.53f, 0.18f),
-                new Vector3(1.62f, 0.70f, 2.25f), glass, Quaternion.identity, false);
+            Transform root = new GameObject("Detailed Parked Sedan").transform;
+            root.SetParent(stageRoot, false);
+            root.position = centre;
+            root.rotation = Quaternion.Euler(0f, centre.x < 0f ? 7f : -7f, 0f);
+
+            Material body = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, bodyTint, 0.58f, 0.48f, "_MissionCarV57");
+            Material glass = materials.TransparentGlass(new Color(0.16f, 0.30f, 0.40f, 0.32f));
+            Material tire = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel, new Color(0.018f, 0.020f, 0.022f), 0.08f, 0.20f, "_MissionTireV57");
+            Material rim = materials.MetallicSolid(new Color(0.52f, 0.55f, 0.58f), 0.88f, 0.74f, "_MissionRimV57");
+            Material lamp = materials.Solid(new Color(0.78f, 0.88f, 1f), true, "_MissionHeadlampV57");
+            Material tail = materials.Solid(new Color(0.72f, 0.035f, 0.018f), true, "_MissionTailLampV57");
+
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Lower Body", root, new Vector3(0f, 0.02f, 0f),
+                new Vector3(1.90f, 0.48f, 4.28f), body, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Sphere, "Sedan Rounded Nose", root, new Vector3(0f, 0.28f, 1.78f),
+                new Vector3(1.86f, 0.50f, 1.02f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Sphere, "Sedan Rounded Rear", root, new Vector3(0f, 0.30f, -1.75f),
+                new Vector3(1.82f, 0.54f, 0.96f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Hood", root, new Vector3(0f, 0.49f, 1.38f),
+                new Vector3(1.76f, 0.11f, 1.18f), body, Quaternion.Euler(-3f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Trunk", root, new Vector3(0f, 0.49f, -1.48f),
+                new Vector3(1.72f, 0.14f, 0.92f), body, Quaternion.Euler(3f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Roof", root, new Vector3(0f, 1.16f, -0.10f),
+                new Vector3(1.58f, 0.12f, 1.80f), body, Quaternion.identity, false);
+
+            GameObject windshield = CreatePrimitive(PrimitiveType.Cube, "Parked Windshield", root,
+                new Vector3(0f, 0.86f, 0.72f), new Vector3(1.58f, 0.62f, 0.030f),
+                glass, Quaternion.Euler(-28f, 0f, 0f), false);
+            escapeGlassPanels.Add(windshield);
+            GameObject rearGlass = CreatePrimitive(PrimitiveType.Cube, "Parked Rear Glass", root,
+                new Vector3(0f, 0.88f, -0.84f), new Vector3(1.56f, 0.58f, 0.030f),
+                glass, Quaternion.Euler(27f, 0f, 0f), false);
+            escapeGlassPanels.Add(rearGlass);
+
             for (int side = -1; side <= 1; side += 2)
             {
+                GameObject frontSide = CreatePrimitive(PrimitiveType.Cube, "Parked Front Side Glass", root,
+                    new Vector3(side * 0.965f, 0.92f, 0.26f), new Vector3(0.028f, 0.44f, 0.96f),
+                    glass, Quaternion.identity, false);
+                escapeGlassPanels.Add(frontSide);
+                GameObject rearSide = CreatePrimitive(PrimitiveType.Cube, "Parked Rear Side Glass", root,
+                    new Vector3(side * 0.965f, 0.92f, -0.66f), new Vector3(0.028f, 0.42f, 0.78f),
+                    glass, Quaternion.identity, false);
+                escapeGlassPanels.Add(rearSide);
+
+                CreatePrimitive(PrimitiveType.Cube, "Side Mirror", root,
+                    new Vector3(side * 1.03f, 0.84f, 0.68f), new Vector3(0.18f, 0.12f, 0.28f),
+                    body, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Headlamp", root,
+                    new Vector3(side * 0.58f, 0.34f, 2.16f), new Vector3(0.34f, 0.15f, 0.035f),
+                    lamp, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Tail Lamp", root,
+                    new Vector3(side * 0.61f, 0.36f, -2.16f), new Vector3(0.31f, 0.16f, 0.035f),
+                    tail, Quaternion.identity, false);
+
                 for (int end = -1; end <= 1; end += 2)
                 {
-                    CreatePrimitive(PrimitiveType.Cylinder, "Car Wheel", stageRoot,
-                        centre + new Vector3(side * 0.94f, -0.18f, end * 1.38f),
-                        new Vector3(0.31f, 0.16f, 0.31f), dark, Quaternion.Euler(0f, 0f, 90f), false);
+                    Vector3 wheelPosition = new Vector3(side * 0.99f, -0.17f, end * 1.38f);
+                    CreatePrimitive(PrimitiveType.Cylinder, "Parked Tire", root, wheelPosition,
+                        new Vector3(0.33f, 0.17f, 0.33f), tire, Quaternion.Euler(0f, 0f, 90f), false);
+                    CreatePrimitive(PrimitiveType.Cylinder, "Parked Alloy Wheel", root,
+                        wheelPosition + new Vector3(side * 0.010f, 0f, 0f),
+                        new Vector3(0.21f, 0.175f, 0.21f), rim, Quaternion.Euler(0f, 0f, 90f), false);
                 }
             }
+
+            CreatePrimitive(PrimitiveType.Cube, "Front Grille", root, new Vector3(0f, 0.18f, 2.18f),
+                new Vector3(0.76f, 0.18f, 0.035f), dark, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Front Bumper", root, new Vector3(0f, 0.05f, 2.17f),
+                new Vector3(1.82f, 0.16f, 0.10f), dark, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Rear Bumper", root, new Vector3(0f, 0.06f, -2.17f),
+                new Vector3(1.82f, 0.16f, 0.10f), dark, Quaternion.identity, false);
         }
 
         private void CreateOperationSetpiece(OperationDefinition operation, int operationStage)
@@ -978,27 +1160,81 @@ namespace BallisticSniper
             }
             else if (operation.Kind == OperationKind.HotelWindow)
             {
+                Material hotelTrim = materials.Get(MaterialLibrary.Surface.Concrete,
+                    new Color(0.58f, 0.55f, 0.50f), 0f, 0.42f, "_HotelTrimV57");
+                Material roomWall = materials.Get(MaterialLibrary.Surface.Concrete,
+                    new Color(0.48f, 0.38f, 0.28f), 0f, 0.34f, "_HotelRoomWallV57");
+                Material curtain = materials.Solid(new Color(0.31f, 0.075f, 0.060f), false, "_HotelCurtainV57");
+                Material sideGlass = materials.TransparentGlass(new Color(0.22f, 0.34f, 0.42f, 0.28f));
+
                 CreatePrimitive(PrimitiveType.Cube, "Hotel Foundation", stageRoot,
                     new Vector3(0f, -0.18f, currentRange + 1.1f), new Vector3(12f, 0.35f, 7f), concrete, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Facade Left", stageRoot,
-                    new Vector3(-3.38f, 2.15f, currentRange), new Vector3(5.30f, 4.30f, 0.36f), darkConcrete, Quaternion.identity, true);
+                    new Vector3(-3.38f, 2.35f, currentRange), new Vector3(5.30f, 4.70f, 0.42f), darkConcrete, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Facade Right", stageRoot,
-                    new Vector3(3.38f, 2.15f, currentRange), new Vector3(5.30f, 4.30f, 0.36f), darkConcrete, Quaternion.identity, true);
+                    new Vector3(3.38f, 2.35f, currentRange), new Vector3(5.30f, 4.70f, 0.42f), darkConcrete, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Facade Sill", stageRoot,
-                    new Vector3(0f, 0.50f, currentRange), new Vector3(1.46f, 1.0f, 0.36f), concrete, Quaternion.identity, true);
+                    new Vector3(0f, 0.50f, currentRange), new Vector3(1.46f, 1.0f, 0.42f), concrete, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Facade Header", stageRoot,
-                    new Vector3(0f, 3.20f, currentRange), new Vector3(1.46f, 2.20f, 0.36f), concrete, Quaternion.identity, true);
+                    new Vector3(0f, 3.38f, currentRange), new Vector3(1.46f, 2.36f, 0.42f), concrete, Quaternion.identity, true);
+
+                CreatePrimitive(PrimitiveType.Cube, "Hotel Base Band", stageRoot,
+                    new Vector3(0f, 0.32f, currentRange - 0.24f), new Vector3(11.5f, 0.42f, 0.20f),
+                    hotelTrim, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Hotel Cornice", stageRoot,
+                    new Vector3(0f, 4.73f, currentRange - 0.20f), new Vector3(11.8f, 0.34f, 0.48f),
+                    hotelTrim, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Hotel Upper Band", stageRoot,
+                    new Vector3(0f, 3.78f, currentRange - 0.22f), new Vector3(11.2f, 0.16f, 0.24f),
+                    hotelTrim, Quaternion.identity, false);
+
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    float x1 = side * 2.25f;
+                    float x2 = side * 4.25f;
+                    CreatePrimitive(PrimitiveType.Cube, "Hotel Side Window A", stageRoot,
+                        new Vector3(x1, 1.55f, currentRange - 0.24f), new Vector3(1.25f, 1.48f, 0.06f),
+                        sideGlass, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Hotel Side Window B", stageRoot,
+                        new Vector3(x2, 1.55f, currentRange - 0.24f), new Vector3(1.25f, 1.48f, 0.06f),
+                        ((side + 1) / 2 == 0) ? sideGlass : warm, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Hotel Side Window Upper", stageRoot,
+                        new Vector3(x1, 3.10f, currentRange - 0.24f), new Vector3(1.25f, 0.92f, 0.06f),
+                        sideGlass, Quaternion.identity, false);
+                    CreatePrimitive(PrimitiveType.Cube, "Hotel Pilaster", stageRoot,
+                        new Vector3(side * 5.72f, 2.35f, currentRange - 0.23f), new Vector3(0.26f, 4.45f, 0.28f),
+                        hotelTrim, Quaternion.identity, false);
+                }
+
                 CreatePrimitive(PrimitiveType.Cube, "Window Frame L", stageRoot,
-                    new Vector3(-0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
+                    new Vector3(-0.71f, 1.56f, currentRange - 0.22f), new Vector3(0.10f, 1.18f, 0.12f), steel, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Window Frame R", stageRoot,
-                    new Vector3(0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
+                    new Vector3(0.71f, 1.56f, currentRange - 0.22f), new Vector3(0.10f, 1.18f, 0.12f), steel, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Window Frame Top", stageRoot,
+                    new Vector3(0f, 2.15f, currentRange - 0.22f), new Vector3(1.52f, 0.10f, 0.12f), steel, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Window Stone Sill", stageRoot,
+                    new Vector3(0f, 0.96f, currentRange - 0.28f), new Vector3(1.68f, 0.16f, 0.38f), hotelTrim, Quaternion.identity, false);
+
                 hotelWindowGlass = CreatePrimitive(PrimitiveType.Cube, "Window Glass", stageRoot,
-                    new Vector3(0f, 1.56f, currentRange - 0.24f), new Vector3(1.32f, 1.04f, 0.008f),
-                    materials.TransparentGlass(new Color(0.38f, 0.58f, 0.70f, 0.11f)), Quaternion.identity, false);
+                    new Vector3(0f, 1.56f, currentRange - 0.28f), new Vector3(1.32f, 1.04f, 0.010f),
+                    materials.TransparentGlass(new Color(0.40f, 0.66f, 0.78f, 0.22f)), Quaternion.identity, false);
+
                 CreatePrimitive(PrimitiveType.Cube, "Room Floor", stageRoot,
                     new Vector3(0f, -0.08f, currentRange + 2.10f), new Vector3(5.2f, 0.18f, 4f), wood, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Room Back Wall", stageRoot,
+                    new Vector3(0f, 2.10f, currentRange + 3.25f), new Vector3(5.15f, 4.20f, 0.18f),
+                    roomWall, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Curtain L", stageRoot,
+                    new Vector3(-0.58f, 1.62f, currentRange + 0.04f), new Vector3(0.16f, 1.62f, 0.10f),
+                    curtain, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Curtain R", stageRoot,
+                    new Vector3(0.58f, 1.62f, currentRange + 0.04f), new Vector3(0.16f, 1.62f, 0.10f),
+                    curtain, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Interior Console", stageRoot,
+                    new Vector3(-1.68f, 0.54f, currentRange + 2.62f), new Vector3(1.10f, 1.00f, 0.48f),
+                    wood, Quaternion.identity, false);
                 CreatePrimitive(PrimitiveType.Cube, "Interior Lamp", stageRoot,
-                    new Vector3(-1.7f, 2.42f, currentRange + 1.3f), new Vector3(0.18f, 0.18f, 0.18f), warm, Quaternion.identity, false);
+                    new Vector3(-1.70f, 2.42f, currentRange + 1.30f), new Vector3(0.18f, 0.18f, 0.18f), warm, Quaternion.identity, false);
 
                 AddHuman("MOROZOV", true, new Vector3(0f, 0.02f, currentRange + 0.52f),
                     HumanMotionStyle.WindowPatrol, 0.35f, new Color(0.075f, 0.30f, 0.21f), new Color(0.09f, 0.11f, 0.12f));
@@ -1009,7 +1245,8 @@ namespace BallisticSniper
                 AddHuman("SECURITY", false, new Vector3(1.62f, 0.02f, currentRange + 1.30f),
                     HumanMotionStyle.Guard, 4.70f, new Color(0.10f, 0.13f, 0.16f), new Color(0.07f, 0.08f, 0.10f));
             }
-            else if (operation.Kind == OperationKind.Rooftop)
+
+        else if (operation.Kind == OperationKind.Rooftop)
             {
                 const float roofY = 5.82f;
                 CreatePrimitive(PrimitiveType.Cube, "Terminal Building", stageRoot,
@@ -1077,8 +1314,6 @@ namespace BallisticSniper
             root.SetParent(stageRoot, false);
             root.position = worldPosition;
             root.rotation = Quaternion.Euler(0f, 90f, 0f);
-            escapeGlassPanels.Clear();
-
             Material body = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
                 new Color(0.075f, 0.095f, 0.125f), 0.88f, 0.74f, "_EscapeVehicleBodyV56");
             Material trim = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
@@ -1100,6 +1335,19 @@ namespace BallisticSniper
                 new Vector3(1.80f, 0.18f, 1.10f), body, Quaternion.Euler(2f, 0f, 0f), false);
             CreatePrimitive(PrimitiveType.Cube, "Sedan Roof", root, new Vector3(0f, 1.16f, -0.08f),
                 new Vector3(1.64f, 0.10f, 2.10f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Sphere, "Sedan Sculpted Nose", root, new Vector3(0f, 0.30f, 1.92f),
+                new Vector3(1.86f, 0.46f, 0.92f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Sphere, "Sedan Sculpted Tail", root, new Vector3(0f, 0.32f, -1.92f),
+                new Vector3(1.82f, 0.50f, 0.84f), body, Quaternion.identity, false);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                CreatePrimitive(PrimitiveType.Cube, "Side Rocker", root,
+                    new Vector3(side * 0.94f, 0.03f, -0.05f), new Vector3(0.08f, 0.13f, 3.15f),
+                    trim, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Door Belt Trim", root,
+                    new Vector3(side * 0.985f, 0.67f, -0.22f), new Vector3(0.035f, 0.055f, 2.45f),
+                    rim, Quaternion.identity, false);
+            }
 
             GameObject windshield = CreatePrimitive(PrimitiveType.Cube, "Laminated Windshield", root,
                 new Vector3(0f, 0.86f, 0.88f), new Vector3(1.64f, 0.66f, 0.035f),
@@ -1143,6 +1391,19 @@ namespace BallisticSniper
             GameObject oppositeRearGlass = CreatePrimitive(PrimitiveType.Cube, "Passenger Rear Safety Glass", root,
                 new Vector3(-0.985f, 0.99f, -0.92f), new Vector3(0.030f, 0.42f, 1.05f), glass, Quaternion.identity, false);
             escapeGlassPanels.Add(oppositeRearGlass);
+
+            CreatePrimitive(PrimitiveType.Cube, "Passenger Front Door Skin", root,
+                new Vector3(-0.985f, 0.40f, 0.13f), new Vector3(0.055f, 0.60f, 1.30f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Passenger Rear Door Skin", root,
+                new Vector3(-0.985f, 0.40f, -0.93f), new Vector3(0.055f, 0.60f, 1.25f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Passenger Front Handle", root,
+                new Vector3(-1.025f, 0.54f, -0.10f), new Vector3(0.035f, 0.045f, 0.22f), trim, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Passenger Rear Handle", root,
+                new Vector3(-1.025f, 0.54f, -1.15f), new Vector3(0.035f, 0.045f, 0.22f), trim, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Driver Mirror", root,
+                new Vector3(1.10f, 0.88f, 0.72f), new Vector3(0.18f, 0.13f, 0.30f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Passenger Mirror", root,
+                new Vector3(-1.10f, 0.88f, 0.72f), new Vector3(0.18f, 0.13f, 0.30f), body, Quaternion.identity, false);
 
             CreatePrimitive(PrimitiveType.Cube, "Front Bumper", root, new Vector3(0f, 0.06f, 2.34f),
                 new Vector3(1.82f, 0.18f, 0.12f), trim, Quaternion.identity, false);

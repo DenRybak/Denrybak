@@ -138,8 +138,8 @@ namespace BallisticSniper
             GameObject coreTrailObject = new GameObject("Thin Tracer Core");
             coreTrailObject.transform.SetParent(transform, false);
             trail = coreTrailObject.AddComponent<TrailRenderer>();
-            trail.time = Mathf.Clamp(record.VisualDuration * 0.125f, 0.065f, 0.125f);
-            trail.widthMultiplier = 0.00095f;
+            trail.time = Mathf.Clamp(record.VisualDuration * 0.18f, 0.10f, 0.19f);
+            trail.widthMultiplier = 0.0065f;
             trail.minVertexDistance = 0.0035f;
             trail.numCornerVertices = 14;
             trail.numCapVertices = 12;
@@ -165,10 +165,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.88f, 0f),
-                    new GradientAlphaKey(0.62f, 0.24f),
-                    new GradientAlphaKey(0.28f, 0.64f),
-                    new GradientAlphaKey(0.060f, 0.88f),
+                    new GradientAlphaKey(1.00f, 0f),
+                    new GradientAlphaKey(0.82f, 0.24f),
+                    new GradientAlphaKey(0.46f, 0.64f),
+                    new GradientAlphaKey(0.12f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -177,7 +177,7 @@ namespace BallisticSniper
             glowObject.transform.SetParent(transform, false);
             glowTrail = glowObject.AddComponent<TrailRenderer>();
             glowTrail.time = trail.time * 1.08f;
-            glowTrail.widthMultiplier = 0.0036f;
+            glowTrail.widthMultiplier = 0.022f;
             glowTrail.minVertexDistance = 0.0035f;
             glowTrail.numCornerVertices = 12;
             glowTrail.numCapVertices = 10;
@@ -199,9 +199,9 @@ namespace BallisticSniper
                     new GradientColorKey(new Color(0.72f, 0.15f, 0.02f), 1f)
                 },
                 new[] {
-                    new GradientAlphaKey(0.22f, 0f),
-                    new GradientAlphaKey(0.12f, 0.52f),
-                    new GradientAlphaKey(0.025f, 0.88f),
+                    new GradientAlphaKey(0.46f, 0f),
+                    new GradientAlphaKey(0.27f, 0.52f),
+                    new GradientAlphaKey(0.075f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             glowTrail.colorGradient = glowGradient;
@@ -209,8 +209,8 @@ namespace BallisticSniper
             tracerLight = gameObject.AddComponent<Light>();
             tracerLight.type = LightType.Point;
             tracerLight.color = new Color(1.00f, 0.48f, 0.12f);
-            tracerLight.intensity = 0.34f;
-            tracerLight.range = 0.85f;
+            tracerLight.intensity = 0.82f;
+            tracerLight.range = 1.55f;
             tracerLight.shadows = LightShadows.None;
         }
 

@@ -706,9 +706,9 @@ namespace BallisticSniper
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
             Material tracerMaterial = world.Materials.Tracer(
-                new Color(1.00f, 0.78f, 0.36f, 0.98f), "_TracerV560");
+                new Color(1.00f, 0.82f, 0.42f, 1.00f), "_TracerV570");
             Material glowMaterial = world.Materials.TracerGlow(
-                new Color(1.00f, 0.44f, 0.08f, 0.24f), "_TracerGlowV560");
+                new Color(1.00f, 0.46f, 0.08f, 0.62f), "_TracerGlowV570");
             killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial, glowMaterial);
         }
 
