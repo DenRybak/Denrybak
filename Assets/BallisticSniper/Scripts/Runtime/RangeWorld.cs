@@ -1293,7 +1293,7 @@ namespace BallisticSniper
                 AddHuman("TARGET BRAVO", true, new Vector3(1.10f, 0.04f, currentRange + 0.18f),
                     HumanMotionStyle.Conversation, 2.10f, new Color(0.12f, 0.32f, 0.62f), new Color(0.09f, 0.10f, 0.12f));
             }
-            else
+            else if (operation.Kind == OperationKind.OfficerBriefing)
             {
                 Material militaryCanvas = materials.Get(MaterialLibrary.Surface.Grass,
                     new Color(0.24f, 0.30f, 0.18f), 0f, 0.30f, "_OfficerMissionCanvasV57");
