@@ -41,7 +41,8 @@ namespace BallisticSniper
         Conversation,
         HotelWindow,
         Rooftop,
-        EscapeVehicle
+        EscapeVehicle,
+        OfficerBriefing
     }
 
     public enum TargetMotion
@@ -164,11 +165,11 @@ namespace BallisticSniper
         public const int CampaignTargets = Stages * TargetsPerStage;
         public const int CampaignDestructibles = 20;
         public const int CampaignMaxScore = 975;
-        public const int OperationStages = 4;
-        public const int OperationTargets = 5;
-        public const int OperationMaxScore = 500;
+        public const int OperationStages = 5;
+        public const int OperationTargets = 6;
+        public const int OperationMaxScore = 600;
 
-        public static readonly int[] ZoomLevels = { 8, 16, 24, 36, 50 };
+        public static readonly int[] ZoomLevels = { 8, 16, 24, 36, 50, 75, 100 };
         public static readonly float[] LanesMil = { -6f, -3f, 0f, 3f, 6f };
 
         public static readonly WeaponDefinition[] Weapons =
@@ -284,7 +285,15 @@ namespace BallisticSniper
                 "После первого попадания вторая цель реагирует с задержкой, бежит к седану, открывает дверь и садится. Поразите её на бегу или через стекло до выхода автомобиля из сектора.",
                 520,
                 5,
-                OperationKind.EscapeVehicle)
+                OperationKind.EscapeVehicle),
+            new OperationDefinition(
+                "КОМАНДНЫЙ БРИФИНГ",
+                "Дальний наблюдательный рубеж • военный командный пункт",
+                "Офицер в фуражке и с погонами • стоит в центре группы",
+                "Офицер находится на 1000 метрах и разговаривает с солдатами. Солдаты двигаются и периодически перекрывают линию огня — подтвердите цель по форме и дождитесь чистого выстрела.",
+                1000,
+                5,
+                OperationKind.OfficerBriefing)
         };
 
         public static int OperationTargetCount(int stage)
