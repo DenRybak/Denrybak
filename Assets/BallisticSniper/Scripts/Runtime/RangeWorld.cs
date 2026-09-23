@@ -1274,7 +1274,7 @@ namespace BallisticSniper
                 AddHuman("GROUND CREW", false, new Vector3(3.15f, roofY, currentRange + 1.15f),
                     HumanMotionStyle.Guard, 3.65f, new Color(0.25f, 0.29f, 0.33f), new Color(0.09f, 0.10f, 0.12f));
             }
-            else
+            else if (operation.Kind == OperationKind.EscapeVehicle)
             {
                 Material road = materials.Get(MaterialLibrary.Surface.Concrete, new Color(0.10f, 0.12f, 0.14f), 0f, 0.22f, "_EscapeRoad");
                 CreatePrimitive(PrimitiveType.Cube, "Escape Cross Street", stageRoot,
@@ -1293,6 +1293,76 @@ namespace BallisticSniper
                 AddHuman("TARGET BRAVO", true, new Vector3(1.10f, 0.04f, currentRange + 0.18f),
                     HumanMotionStyle.Conversation, 2.10f, new Color(0.12f, 0.32f, 0.62f), new Color(0.09f, 0.10f, 0.12f));
             }
+            else
+            {
+                Material militaryCanvas = materials.Get(MaterialLibrary.Surface.Grass,
+                    new Color(0.24f, 0.30f, 0.18f), 0f, 0.30f, "_OfficerMissionCanvasV57");
+                Material militaryDark = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
+                    new Color(0.10f, 0.13f, 0.09f), 0.35f, 0.34f, "_OfficerMissionDarkV57");
+                Material sandbag = materials.Get(MaterialLibrary.Surface.Sandstone,
+                    new Color(0.55f, 0.48f, 0.34f), 0f, 0.30f, "_OfficerMissionSandbagV57");
+                Material insignia = materials.MetallicSolid(
+                    new Color(0.76f, 0.61f, 0.18f), 0.76f, 0.70f, "_OfficerInsigniaV57");
+
+                CreatePrimitive(PrimitiveType.Cube, "Command Yard", stageRoot,
+                    new Vector3(0f, 0.02f, currentRange + 0.70f), new Vector3(24f, 0.18f, 15f),
+                    concrete, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Command Post Rear", stageRoot,
+                    new Vector3(0f, 2.05f, currentRange + 6.55f), new Vector3(16f, 4.1f, 0.40f),
+                    militaryCanvas, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Command Post Roof", stageRoot,
+                    new Vector3(0f, 4.15f, currentRange + 4.35f), new Vector3(16.8f, 0.24f, 4.8f),
+                    militaryCanvas, Quaternion.Euler(-2f, 0f, 0f), false);
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    CreatePrimitive(PrimitiveType.Cylinder, "Command Post Pole", stageRoot,
+                        new Vector3(side * 7.55f, 2.10f, currentRange + 2.25f),
+                        new Vector3(0.11f, 2.05f, 0.11f), militaryDark, Quaternion.identity, true);
+                    CreatePrimitive(PrimitiveType.Cube, "Concrete Barrier", stageRoot,
+                        new Vector3(side * 7.0f, 0.52f, currentRange - 2.65f),
+                        new Vector3(4.3f, 1.0f, 0.62f), concrete, Quaternion.identity, true);
+                }
+
+                for (int i = 0; i < 8; i++)
+                {
+                    float x = -5.2f + i * 1.48f;
+                    CreatePrimitive(PrimitiveType.Capsule, "Sandbag", stageRoot,
+                        new Vector3(x, 0.34f, currentRange + 5.95f),
+                        new Vector3(0.66f, 0.26f, 0.42f), sandbag, Quaternion.Euler(90f, 0f, 0f), false);
+                }
+
+                CreatePrimitive(PrimitiveType.Cube, "Briefing Table", stageRoot,
+                    new Vector3(0.10f, 0.82f, currentRange + 0.82f),
+                    new Vector3(2.25f, 0.10f, 1.20f), wood, Quaternion.identity, true);
+                CreatePrimitive(PrimitiveType.Cube, "Map Case", stageRoot,
+                    new Vector3(0.10f, 0.93f, currentRange + 0.82f),
+                    new Vector3(1.52f, 0.06f, 0.76f),
+                    materials.Solid(new Color(0.58f, 0.52f, 0.35f), false, "_OfficerMapV57"),
+                    Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cylinder, "Radio Mast", stageRoot,
+                    new Vector3(6.6f, 5.25f, currentRange + 5.8f),
+                    new Vector3(0.09f, 5.2f, 0.09f), militaryDark, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "Radio Crossbar", stageRoot,
+                    new Vector3(6.6f, 8.85f, currentRange + 5.8f),
+                    new Vector3(2.2f, 0.08f, 0.08f), militaryDark, Quaternion.identity, false);
+
+                HumanMissionActor officer = AddHuman("OFFICER SOKOLOV", true,
+                    new Vector3(0.0f, 0.04f, currentRange + 0.10f),
+                    HumanMotionStyle.Conversation, 0.35f,
+                    new Color(0.20f, 0.28f, 0.13f), new Color(0.10f, 0.12f, 0.08f));
+                DecorateOfficer(officer, militaryDark, insignia);
+
+                AddHuman("SOLDIER ALPHA", false, new Vector3(-1.15f, 0.04f, currentRange - 0.15f),
+                    HumanMotionStyle.Conversation, 1.20f, new Color(0.28f, 0.35f, 0.20f), new Color(0.12f, 0.15f, 0.10f));
+                AddHuman("SOLDIER BRAVO", false, new Vector3(1.25f, 0.04f, currentRange - 0.05f),
+                    HumanMotionStyle.Conversation, 2.40f, new Color(0.26f, 0.34f, 0.19f), new Color(0.11f, 0.14f, 0.09f));
+                AddHuman("SOLDIER CHARLIE", false, new Vector3(-2.20f, 0.04f, currentRange + 0.65f),
+                    HumanMotionStyle.Guard, 3.30f, new Color(0.23f, 0.31f, 0.17f), new Color(0.10f, 0.13f, 0.09f));
+                AddHuman("SOLDIER DELTA", false, new Vector3(2.25f, 0.04f, currentRange + 0.72f),
+                    HumanMotionStyle.Guard, 4.45f, new Color(0.29f, 0.36f, 0.20f), new Color(0.12f, 0.14f, 0.10f));
+                AddHuman("SOLDIER ECHO", false, new Vector3(0.78f, 0.04f, currentRange + 1.55f),
+                    HumanMotionStyle.CrossingSpeaker, 5.25f, new Color(0.25f, 0.33f, 0.18f), new Color(0.10f, 0.13f, 0.09f));
+            }
 
             GameObject keyObject = new GameObject("Operation Key Light");
             keyObject.transform.SetParent(stageRoot, false);
@@ -1306,6 +1376,28 @@ namespace BallisticSniper
             key.intensity = 1.45f;
             key.range = 16f;
             key.shadows = LightShadows.None;
+        }
+
+        private void DecorateOfficer(HumanMissionActor officer, Material capMaterial, Material insignia)
+        {
+            if (officer == null) return;
+            Transform root = officer.transform;
+
+            CreatePrimitive(PrimitiveType.Cylinder, "Officer Peaked Cap Crown", root,
+                new Vector3(0f, 1.98f, 0.00f), new Vector3(0.27f, 0.035f, 0.25f),
+                capMaterial, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Officer Cap Visor", root,
+                new Vector3(0f, 1.93f, -0.20f), new Vector3(0.34f, 0.035f, 0.18f),
+                capMaterial, Quaternion.Euler(-6f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "Officer Left Epaulette", root,
+                new Vector3(-0.29f, 1.53f, -0.02f), new Vector3(0.20f, 0.055f, 0.26f),
+                insignia, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Officer Right Epaulette", root,
+                new Vector3(0.29f, 1.53f, -0.02f), new Vector3(0.20f, 0.055f, 0.26f),
+                insignia, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Officer Chest Insignia", root,
+                new Vector3(0.16f, 1.48f, -0.245f), new Vector3(0.20f, 0.055f, 0.025f),
+                insignia, Quaternion.identity, false);
         }
 
         private Transform CreateEscapeVehicle(Vector3 worldPosition, Material dark)
