@@ -40,7 +40,8 @@ namespace BallisticSniper
     {
         Conversation,
         HotelWindow,
-        Rooftop
+        Rooftop,
+        EscapeVehicle
     }
 
     public enum TargetMotion
@@ -163,8 +164,9 @@ namespace BallisticSniper
         public const int CampaignTargets = Stages * TargetsPerStage;
         public const int CampaignDestructibles = 20;
         public const int CampaignMaxScore = 975;
-        public const int OperationStages = 3;
-        public const int OperationMaxScore = 300;
+        public const int OperationStages = 4;
+        public const int OperationTargets = 5;
+        public const int OperationMaxScore = 500;
 
         public static readonly int[] ZoomLevels = { 8, 16, 24, 36, 50 };
         public static readonly float[] LanesMil = { -6f, -3f, 0f, 3f, 6f };
@@ -269,13 +271,28 @@ namespace BallisticSniper
                 OperationKind.HotelWindow),
             new OperationDefinition(
                 "КРЫША ТЕРМИНАЛА",
-                "Финальная сцена на крыше городского терминала",
+                "Сцена на крыше городского терминала",
                 "Песочный плащ • перемещается по крыше",
                 "Парапет закрывает нижнюю часть силуэта, охрана и персонал пересекают линию наблюдения.",
                 610,
                 5,
-                OperationKind.Rooftop)
+                OperationKind.Rooftop),
+            new OperationDefinition(
+                "ВЫСОТНЫЙ ПЕРЕХВАТ",
+                "Позиция стрелка на высоте • две подтверждённые цели у автомобиля",
+                "Две цели у тёмного седана • устранить обе",
+                "После первого попадания вторая цель прыгает в автомобиль. Машина резко уходит поперёк сектора — поразите цель через окно до выхода из зоны.",
+                520,
+                5,
+                OperationKind.EscapeVehicle)
         };
+
+        public static int OperationTargetCount(int stage)
+        {
+            if (OperationDefinitions == null || OperationDefinitions.Length == 0) return 1;
+            int safeStage = Mathf.Clamp(stage, 0, OperationDefinitions.Length - 1);
+            return OperationDefinitions[safeStage].Kind == OperationKind.EscapeVehicle ? 2 : 1;
+        }
 
         public static WeaponDefinition Weapon(int index)
         {
