@@ -124,7 +124,7 @@ namespace BallisticSniper
             if (survivor == null) return false;
             escapeStartClock = clock;
             escapeActive = true;
-            survivor.BeginVehicleEscape(escapeVehicle, new Vector3(-0.42f, -0.24f, 0.10f), clock);
+            survivor.BeginVehicleEscape(escapeVehicle, new Vector3(-0.42f, -0.70f, 0.10f), clock);
             Debug.Log("BALLISTIC_ESCAPE_STARTED survivor=" + survivor.name + " clock=" + clock.ToString("0.00"));
             return true;
         }
