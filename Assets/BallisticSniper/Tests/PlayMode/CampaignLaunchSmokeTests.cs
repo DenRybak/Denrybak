@@ -184,7 +184,6 @@ namespace BallisticSniper.Tests
         public IEnumerator EscapeOperationHasTwoTargetsAndMovingVehiclePassenger()
         {
             yield return null;
-
             RangeWorld world = Object.FindObjectOfType<RangeWorld>();
             Assert.That(world, Is.Not.Null);
             Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(4));
@@ -192,32 +191,44 @@ namespace BallisticSniper.Tests
 
             world.BuildStage(3, Difficulty.Cadet, CampaignMode.Operations);
             yield return null;
-
             HumanMissionActor first = null;
             HumanMissionActor second = null;
             for (int i = 0; i < world.Humans.Count; i++)
             {
                 HumanMissionActor actor = world.Humans[i];
                 if (!actor.IsPrimary) continue;
-                if (first == null) first = actor;
-                else if (second == null) second = actor;
+                if (first == null) first = actor; else if (second == null) second = actor;
             }
-
-            Assert.That(first, Is.Not.Null, "First escape target is missing");
-            Assert.That(second, Is.Not.Null, "Second escape target is missing");
+            Assert.That(first, Is.Not.Null);
+            Assert.That(second, Is.Not.Null);
             Vector3 before = second.transform.position;
+            Assert.That(world.BeginEscapeAfterFirstTarget(first, 0f), Is.True);
 
-            Assert.That(world.BeginEscapeAfterFirstTarget(first, 0f), Is.True,
-                "The surviving target did not enter the escape sequence");
-            world.TickTargets(0.48f);
-            Vector3 entry = second.transform.position;
-            Assert.That(entry.y, Is.GreaterThan(before.y + 0.05f),
-                "The surviving target did not jump into the vehicle");
+            world.TickTargets(0.75f);
+            Assert.That(Vector3.Distance(second.transform.position, before), Is.LessThan(0.08f),
+                "The survivor moved before the one-second reaction delay elapsed");
 
-            world.TickTargets(2.25f);
-            Vector3 moving = second.transform.position;
-            Assert.That(Vector3.Distance(moving, before), Is.GreaterThan(0.8f),
+            world.TickTargets(1.70f);
+            Assert.That(Vector3.Distance(second.transform.position, before), Is.GreaterThan(0.35f),
+                "The survivor did not run toward the car");
+            Assert.That(second.IsSeatedInVehicle, Is.False);
+
+            world.TickTargets(4.15f);
+            Assert.That(second.IsSeatedInVehicle, Is.True,
+                "The smooth boarding sequence did not place the survivor in the vehicle");
+
+            Vector3 seated = second.transform.position;
+            world.TickTargets(5.60f);
+            Assert.That(Vector3.Distance(second.transform.position, seated), Is.GreaterThan(1.0f),
                 "The target-in-car did not move through the firing sector");
+
+            world.TickTargets(8.10f);
+            Assert.That(world.EscapeTargetLost, Is.True);
+
+            world.BuildStage(1, Difficulty.Cadet, CampaignMode.Operations);
+            yield return null;
+            Assert.That(world.TryShatterOperationGlass(new Vector3(0f, 1.56f, 420f)), Is.True,
+                "Hotel window glass did not shatter on impact");
 
             world.BuildStage(0, Difficulty.Cadet, CampaignMode.Operations);
             yield return null;

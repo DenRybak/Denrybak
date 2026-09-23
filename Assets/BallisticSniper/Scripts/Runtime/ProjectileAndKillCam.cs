@@ -125,15 +125,19 @@ namespace BallisticSniper
         private float age;
         private Action completed;
         private TrailRenderer trail;
+        private TrailRenderer glowTrail;
+        private Light tracerLight;
 
-        public void Begin(ShotRecord record, Material trailMaterial, Action onCompleted)
+        public void Begin(ShotRecord record, Material trailMaterial, Material glowMaterial, Action onCompleted)
         {
             shot = record;
             completed = onCompleted;
             age = 0f;
             transform.position = record.Start;
 
-            trail = gameObject.AddComponent<TrailRenderer>();
+            GameObject coreTrailObject = new GameObject("Thin Tracer Core");
+            coreTrailObject.transform.SetParent(transform, false);
+            trail = coreTrailObject.AddComponent<TrailRenderer>();
             trail.time = Mathf.Clamp(record.VisualDuration * 0.125f, 0.065f, 0.125f);
             trail.widthMultiplier = 0.00095f;
             trail.minVertexDistance = 0.0035f;
@@ -168,6 +172,46 @@ namespace BallisticSniper
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
+
+            GameObject glowObject = new GameObject("Soft Tracer Glow");
+            glowObject.transform.SetParent(transform, false);
+            glowTrail = glowObject.AddComponent<TrailRenderer>();
+            glowTrail.time = trail.time * 1.08f;
+            glowTrail.widthMultiplier = 0.0036f;
+            glowTrail.minVertexDistance = 0.0035f;
+            glowTrail.numCornerVertices = 12;
+            glowTrail.numCapVertices = 10;
+            glowTrail.alignment = LineAlignment.View;
+            glowTrail.textureMode = LineTextureMode.Stretch;
+            glowTrail.generateLightingData = false;
+            glowTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            glowTrail.receiveShadows = false;
+            glowTrail.autodestruct = false;
+            glowTrail.sharedMaterial = glowMaterial;
+            glowTrail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 1.00f), new Keyframe(0.40f, 0.70f),
+                new Keyframe(0.78f, 0.24f), new Keyframe(1f, 0.00f));
+            Gradient glowGradient = new Gradient();
+            glowGradient.SetKeys(
+                new[] {
+                    new GradientColorKey(new Color(1.00f, 0.68f, 0.24f), 0f),
+                    new GradientColorKey(new Color(1.00f, 0.34f, 0.06f), 0.60f),
+                    new GradientColorKey(new Color(0.72f, 0.15f, 0.02f), 1f)
+                },
+                new[] {
+                    new GradientAlphaKey(0.22f, 0f),
+                    new GradientAlphaKey(0.12f, 0.52f),
+                    new GradientAlphaKey(0.025f, 0.88f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            glowTrail.colorGradient = glowGradient;
+
+            tracerLight = gameObject.AddComponent<Light>();
+            tracerLight.type = LightType.Point;
+            tracerLight.color = new Color(1.00f, 0.48f, 0.12f);
+            tracerLight.intensity = 0.34f;
+            tracerLight.range = 0.85f;
+            tracerLight.shadows = LightShadows.None;
         }
 
         private void Update()
@@ -186,8 +230,21 @@ namespace BallisticSniper
             {
                 Action callback = completed;
                 completed = null;
+                if (trail != null)
+                {
+                    trail.emitting = false;
+                    Transform trailTransform = trail.transform;
+                    trailTransform.SetParent(null, true);
+                    Destroy(trailTransform.gameObject, trail.time + 0.06f);
+                }
+                if (glowTrail != null)
+                {
+                    glowTrail.emitting = false;
+                    Transform glowTransform = glowTrail.transform;
+                    glowTransform.SetParent(null, true);
+                    Destroy(glowTransform.gameObject, glowTrail.time + 0.06f);
+                }
                 callback?.Invoke();
-                if (trail != null) trail.transform.SetParent(null, true);
                 Destroy(gameObject);
             }
         }
@@ -214,9 +271,11 @@ namespace BallisticSniper
         private ShotRecord shot;
         private Material bulletMaterial;
         private Material trailMaterial;
+        private Material glowMaterial;
         private GameObject bullet;
         private GameObject impactHighlight;
         private TrailRenderer trail;
+        private TrailRenderer glowTrail;
         private Action completed;
         private float elapsed;
         private float duration;
@@ -231,11 +290,12 @@ namespace BallisticSniper
         public int Variant => variant;
         public float Progress => duration <= 0f ? 0f : Mathf.Clamp01(elapsed / duration);
 
-        public void Initialize(Camera camera, Material projectileMaterial, Material tracerMaterial)
+        public void Initialize(Camera camera, Material projectileMaterial, Material tracerMaterial, Material tracerGlowMaterial)
         {
             targetCamera = camera;
             bulletMaterial = projectileMaterial;
             trailMaterial = tracerMaterial;
+            glowMaterial = tracerGlowMaterial;
         }
 
         public void Begin(ShotRecord record, int cameraVariant, Action onCompleted)
@@ -290,6 +350,45 @@ namespace BallisticSniper
                 });
             trail.colorGradient = killGradient;
 
+            GameObject glowObject = new GameObject("Kill-cam Soft Tracer Glow");
+            glowObject.transform.SetParent(bullet.transform, false);
+            glowTrail = glowObject.AddComponent<TrailRenderer>();
+            glowTrail.time = 0.190f;
+            glowTrail.widthMultiplier = 0.0042f;
+            glowTrail.minVertexDistance = 0.0030f;
+            glowTrail.numCornerVertices = 14;
+            glowTrail.numCapVertices = 12;
+            glowTrail.alignment = LineAlignment.View;
+            glowTrail.textureMode = LineTextureMode.Stretch;
+            glowTrail.generateLightingData = false;
+            glowTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            glowTrail.receiveShadows = false;
+            glowTrail.autodestruct = false;
+            glowTrail.sharedMaterial = glowMaterial;
+            glowTrail.widthCurve = new AnimationCurve(
+                new Keyframe(0f, 1.00f), new Keyframe(0.35f, 0.72f),
+                new Keyframe(0.76f, 0.25f), new Keyframe(1f, 0.00f));
+            Gradient killGlowGradient = new Gradient();
+            killGlowGradient.SetKeys(
+                new[] {
+                    new GradientColorKey(new Color(1.00f, 0.72f, 0.28f), 0f),
+                    new GradientColorKey(new Color(1.00f, 0.36f, 0.06f), 0.60f),
+                    new GradientColorKey(new Color(0.70f, 0.14f, 0.02f), 1f)
+                },
+                new[] {
+                    new GradientAlphaKey(0.26f, 0f),
+                    new GradientAlphaKey(0.14f, 0.52f),
+                    new GradientAlphaKey(0.030f, 0.88f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            glowTrail.colorGradient = killGlowGradient;
+            Light glowLight = bullet.AddComponent<Light>();
+            glowLight.type = LightType.Point;
+            glowLight.color = new Color(1.00f, 0.50f, 0.14f);
+            glowLight.intensity = 0.42f;
+            glowLight.range = 1.05f;
+            glowLight.shadows = LightShadows.None;
+
             impactHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             impactHighlight.name = "Kill-cam Impact Point";
             impactHighlight.transform.localScale = Vector3.one * 0.012f;
@@ -332,6 +431,7 @@ namespace BallisticSniper
                 impactHighlight.transform.position = shot.Impact - approach * 0.020f;
                 impactHighlight.SetActive(true);
                 if (trail != null) trail.emitting = false;
+                if (glowTrail != null) glowTrail.emitting = false;
                 impactVisible = true;
             }
 

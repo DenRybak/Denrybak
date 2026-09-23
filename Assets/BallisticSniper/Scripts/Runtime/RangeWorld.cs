@@ -19,15 +19,28 @@ namespace BallisticSniper
         private float currentRange;
         private CampaignMode currentMode;
         private Transform escapeVehicle;
+        private Transform escapeDoorPivot;
+        private Quaternion escapeDoorClosedRotation;
+        private readonly List<GameObject> escapeGlassPanels = new List<GameObject>();
+        private GameObject hotelWindowGlass;
+        private HumanMissionActor escapeSurvivor;
         private Vector3 escapeVehicleStart;
         private float escapeStartClock;
         private bool escapeActive;
+        private bool escapeTargetLost;
+
+        private const float EscapeReactionSeconds = 1.0f;
+        private const float EscapeRunSeconds = 1.85f;
+        private const float EscapeBoardSeconds = 1.10f;
+        private const float EscapeDriveDelay = 4.35f;
 
         public IReadOnlyList<TargetActor> Targets => targets;
         public IReadOnlyList<HumanMissionActor> Humans => humans;
         public HumanMissionActor PrimaryHuman { get; private set; }
         public TargetActor BonusTarget { get; private set; }
         public MaterialLibrary Materials => materials;
+        public bool EscapeTargetLost => escapeTargetLost;
+        public bool EscapeSequenceActive => escapeActive;
 
         public void Initialize()
         {
@@ -74,26 +87,38 @@ namespace BallisticSniper
         {
             if (escapeActive && escapeVehicle != null)
             {
-                float driveTime = Mathf.Max(0f, clock - escapeStartClock - 0.95f);
-                float distance = Mathf.Min(10f, driveTime * 3.4f);
-                Vector3 position = escapeVehicleStart;
-                position.x -= distance;
-                position.z += Mathf.Sin(driveTime * 1.15f) * 0.18f;
-                escapeVehicle.position = position;
+                float elapsed = Mathf.Max(0f, clock - escapeStartClock);
+
+                if (escapeDoorPivot != null)
+                {
+                    float doorOpen;
+                    if (elapsed < 2.18f) doorOpen = 0f;
+                    else if (elapsed < 2.62f)
+                        doorOpen = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(2.18f, 2.62f, elapsed));
+                    else if (elapsed < 3.95f) doorOpen = 1f;
+                    else if (elapsed < EscapeDriveDelay)
+                        doorOpen = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(3.95f, EscapeDriveDelay, elapsed));
+                    else doorOpen = 0f;
+
+                    escapeDoorPivot.localRotation =
+                        escapeDoorClosedRotation * Quaternion.Euler(0f, -72f * doorOpen, 0f);
+                }
+
+                if (elapsed >= EscapeDriveDelay)
+                {
+                    float driveTime = elapsed - EscapeDriveDelay;
+                    float distance = Mathf.Min(15.5f, driveTime * 4.25f);
+                    Vector3 position = escapeVehicleStart;
+                    position.x -= distance;
+                    position.z += Mathf.Sin(driveTime * 1.25f) * 0.16f;
+                    escapeVehicle.position = position;
+                    if (distance >= 14.0f) escapeTargetLost = true;
+                }
             }
 
-            for (int i = 0; i < targets.Count; i++)
-            {
-                targets[i].Tick(clock);
-            }
-            if (BonusTarget != null && BonusTarget.gameObject.activeSelf)
-            {
-                BonusTarget.Tick(clock);
-            }
-            for (int i = 0; i < humans.Count; i++)
-            {
-                humans[i].Tick(clock);
-            }
+            for (int i = 0; i < targets.Count; i++) targets[i].Tick(clock);
+            if (BonusTarget != null && BonusTarget.gameObject.activeSelf) BonusTarget.Tick(clock);
+            for (int i = 0; i < humans.Count; i++) humans[i].Tick(clock);
         }
 
         public bool BeginEscapeAfterFirstTarget(HumanMissionActor hitActor, float clock)
@@ -103,18 +128,13 @@ namespace BallisticSniper
                 currentStage >= GameRules.OperationDefinitions.Length ||
                 GameRules.OperationDefinitions[currentStage].Kind != OperationKind.EscapeVehicle ||
                 escapeVehicle == null)
-            {
                 return false;
-            }
 
             HumanMissionActor survivor = null;
             for (int i = 0; i < humans.Count; i++)
             {
                 HumanMissionActor candidate = humans[i];
-                if (candidate != null &&
-                    candidate != hitActor &&
-                    candidate.IsPrimary &&
-                    !candidate.IsRagdolled)
+                if (candidate != null && candidate != hitActor && candidate.IsPrimary && !candidate.IsRagdolled)
                 {
                     survivor = candidate;
                     break;
@@ -124,9 +144,110 @@ namespace BallisticSniper
             if (survivor == null) return false;
             escapeStartClock = clock;
             escapeActive = true;
-            survivor.BeginVehicleEscape(escapeVehicle, new Vector3(-0.42f, -0.70f, 0.10f), clock);
-            Debug.Log("BALLISTIC_ESCAPE_STARTED survivor=" + survivor.name + " clock=" + clock.ToString("0.00"));
+            escapeTargetLost = false;
+            escapeSurvivor = survivor;
+
+            Vector3 doorEntry = escapeVehicle.TransformPoint(new Vector3(1.24f, -0.44f, 0.18f));
+            Vector3 seatLocal = new Vector3(0.34f, -0.80f, 0.08f);
+            survivor.BeginVehicleEscape(escapeVehicle, doorEntry, seatLocal, clock);
+            Debug.Log("BALLISTIC_ESCAPE_STARTED survivor=" + survivor.name +
+                      " reaction=1.00 run=" + EscapeRunSeconds.ToString("0.00") +
+                      " clock=" + clock.ToString("0.00"));
             return true;
+        }
+
+        public bool TryShatterOperationGlass(Vector3 impactPoint)
+        {
+            if (currentMode != CampaignMode.Operations) return false;
+
+            if (currentStage == 1 && hotelWindowGlass != null && hotelWindowGlass.activeSelf)
+            {
+                if (Mathf.Abs(impactPoint.x) <= 0.70f &&
+                    impactPoint.y >= 1.00f &&
+                    impactPoint.y <= 2.12f)
+                {
+                    ShatterGlassPanel(hotelWindowGlass, impactPoint, "Hotel Window Shard");
+                    return true;
+                }
+            }
+
+            if (currentStage == 3 && escapeVehicle != null)
+            {
+                GameObject best = null;
+                float bestScore = float.MaxValue;
+                for (int i = 0; i < escapeGlassPanels.Count; i++)
+                {
+                    GameObject panel = escapeGlassPanels[i];
+                    if (panel == null || !panel.activeSelf) continue;
+                    Renderer renderer = panel.GetComponent<Renderer>();
+                    if (renderer == null) continue;
+                    Bounds bounds = renderer.bounds;
+                    float dx = Mathf.Max(0f, Mathf.Abs(impactPoint.x - bounds.center.x) - bounds.extents.x);
+                    float dy = Mathf.Max(0f, Mathf.Abs(impactPoint.y - bounds.center.y) - bounds.extents.y);
+                    float score = dx * dx + dy * dy;
+                    if (score < bestScore && score <= 0.075f)
+                    {
+                        bestScore = score;
+                        best = panel;
+                    }
+                }
+
+                if (best != null)
+                {
+                    ShatterGlassPanel(best, impactPoint, "Vehicle Safety Glass Shard");
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void ShatterGlassPanel(GameObject panel, Vector3 impactPoint, string shardName)
+        {
+            if (panel == null || !panel.activeSelf) return;
+            Renderer renderer = panel.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                panel.SetActive(false);
+                return;
+            }
+
+            Bounds bounds = renderer.bounds;
+            Material shardMaterial = renderer.sharedMaterial;
+            panel.SetActive(false);
+
+            Random.State oldState = Random.state;
+            Random.InitState(
+                currentStage * 2039 +
+                Mathf.RoundToInt(impactPoint.x * 97f) +
+                Mathf.RoundToInt(impactPoint.y * 131f));
+
+            for (int i = 0; i < 24; i++)
+            {
+                Vector3 offset = new Vector3(
+                    Random.Range(-bounds.extents.x, bounds.extents.x),
+                    Random.Range(-bounds.extents.y, bounds.extents.y),
+                    Random.Range(-0.018f, 0.018f));
+                float size = Random.Range(0.028f, 0.075f);
+                GameObject shard = CreatePrimitive(
+                    PrimitiveType.Cube, shardName, stageRoot,
+                    bounds.center + offset,
+                    new Vector3(size, size * Random.Range(0.45f, 1.35f), 0.010f),
+                    shardMaterial, Random.rotation, false);
+                Rigidbody body = shard.AddComponent<Rigidbody>();
+                body.mass = Random.Range(0.008f, 0.025f);
+                body.useGravity = true;
+                body.velocity = new Vector3(
+                    Random.Range(-1.8f, 1.8f),
+                    Random.Range(0.7f, 3.0f),
+                    Random.Range(-4.8f, -2.0f));
+                body.angularVelocity = Random.insideUnitSphere * 12f;
+                TimedDestroy timed = shard.AddComponent<TimedDestroy>();
+                timed.Lifetime = Random.Range(1.8f, 3.0f);
+                transientObjects.Add(shard);
+            }
+
+            Random.state = oldState;
         }
 
         public void ShowBonusTarget()
@@ -196,10 +317,18 @@ namespace BallisticSniper
             }
             if (currentStage == 2)
             {
-                // The roof parapet hides the lower body. The ventilation box
-                // adds a second hard obstruction near the right patrol point.
                 if (impactPoint.y < 6.48f) return true;
                 if (impactPoint.x > 0.62f && impactPoint.x < 1.52f && impactPoint.y < 7.42f) return true;
+            }
+            if (currentStage == 3 &&
+                escapeActive &&
+                escapeSurvivor != null &&
+                escapeSurvivor.IsSeatedInVehicle &&
+                escapeVehicle != null)
+            {
+                float lateral = Mathf.Abs(impactPoint.x - escapeVehicle.position.x);
+                if (lateral <= 2.35f && (impactPoint.y < 0.72f || impactPoint.y > 1.62f))
+                    return true;
             }
             return false;
         }
@@ -271,7 +400,12 @@ namespace BallisticSniper
             PrimaryHuman = null;
             BonusTarget = null;
             escapeVehicle = null;
+            escapeDoorPivot = null;
+            escapeGlassPanels.Clear();
+            hotelWindowGlass = null;
+            escapeSurvivor = null;
             escapeActive = false;
+            escapeTargetLost = false;
             escapeStartClock = 0f;
             transientObjects.Clear();
         }
@@ -858,9 +992,9 @@ namespace BallisticSniper
                     new Vector3(-0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Window Frame R", stageRoot,
                     new Vector3(0.71f, 1.56f, currentRange - 0.20f), new Vector3(0.09f, 1.18f, 0.10f), steel, Quaternion.identity, true);
-                CreatePrimitive(PrimitiveType.Cube, "Window Glass", stageRoot,
+                hotelWindowGlass = CreatePrimitive(PrimitiveType.Cube, "Window Glass", stageRoot,
                     new Vector3(0f, 1.56f, currentRange - 0.24f), new Vector3(1.32f, 1.04f, 0.008f),
-                    materials.TransparentGlass(new Color(0.38f, 0.58f, 0.70f, 0.055f)), Quaternion.identity, false);
+                    materials.TransparentGlass(new Color(0.38f, 0.58f, 0.70f, 0.11f)), Quaternion.identity, false);
                 CreatePrimitive(PrimitiveType.Cube, "Room Floor", stageRoot,
                     new Vector3(0f, -0.08f, currentRange + 2.10f), new Vector3(5.2f, 0.18f, 4f), wood, Quaternion.identity, true);
                 CreatePrimitive(PrimitiveType.Cube, "Interior Lamp", stageRoot,
@@ -939,41 +1073,106 @@ namespace BallisticSniper
 
         private Transform CreateEscapeVehicle(Vector3 worldPosition, Material dark)
         {
-            Transform root = new GameObject("ESCAPE VEHICLE — DARK SEDAN").transform;
+            Transform root = new GameObject("ESCAPE VEHICLE — PREMIUM DARK SEDAN").transform;
             root.SetParent(stageRoot, false);
             root.position = worldPosition;
             root.rotation = Quaternion.Euler(0f, 90f, 0f);
+            escapeGlassPanels.Clear();
 
-            Material body = materials.Get(
-                MaterialLibrary.Surface.ScratchedBlackSteel,
-                new Color(0.11f, 0.14f, 0.18f),
-                0.74f,
-                0.52f,
-                "_EscapeVehicleBody");
-            Material glass = materials.TransparentGlass(new Color(0.22f, 0.42f, 0.55f, 0.22f));
+            Material body = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
+                new Color(0.075f, 0.095f, 0.125f), 0.88f, 0.74f, "_EscapeVehicleBodyV56");
+            Material trim = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
+                new Color(0.025f, 0.030f, 0.038f), 0.72f, 0.58f, "_EscapeVehicleTrimV56");
+            Material tire = materials.Get(MaterialLibrary.Surface.ScratchedBlackSteel,
+                new Color(0.018f, 0.020f, 0.022f), 0.10f, 0.22f, "_EscapeVehicleTireV56");
+            Material rim = materials.MetallicSolid(new Color(0.48f, 0.51f, 0.54f), 0.92f, 0.82f, "_EscapeVehicleRimV56");
+            Material glass = materials.TransparentGlass(new Color(0.22f, 0.42f, 0.55f, 0.26f));
+            Material headlight = materials.Solid(new Color(0.82f, 0.91f, 1.00f), true, "_EscapeHeadlampV56");
+            Material tailLight = materials.Solid(new Color(0.90f, 0.055f, 0.025f), true, "_EscapeTailLampV56");
 
-            CreatePrimitive(PrimitiveType.Cube, "Escape Car Chassis", root, new Vector3(0f, 0f, 0f),
-                new Vector3(1.92f, 0.48f, 4.45f), body, Quaternion.identity, true);
-            CreatePrimitive(PrimitiveType.Cube, "Escape Car Lower Cabin", root, new Vector3(0f, 0.48f, 0.12f),
-                new Vector3(1.70f, 0.56f, 2.30f), glass, Quaternion.identity, false);
-            CreatePrimitive(PrimitiveType.Cube, "Escape Car Roof", root, new Vector3(0f, 0.92f, 0.10f),
-                new Vector3(1.72f, 0.09f, 2.28f), body, Quaternion.identity, false);
-            CreatePrimitive(PrimitiveType.Cube, "Escape Car Front Pillar", root, new Vector3(0f, 0.56f, 1.15f),
-                new Vector3(1.74f, 0.10f, 0.12f), body, Quaternion.identity, false);
-            CreatePrimitive(PrimitiveType.Cube, "Escape Car Rear Pillar", root, new Vector3(0f, 0.56f, -1.02f),
-                new Vector3(1.74f, 0.10f, 0.12f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Lower Body", root, new Vector3(0f, 0.02f, 0f),
+                new Vector3(1.92f, 0.46f, 4.62f), body, Quaternion.identity, true);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Beltline", root, new Vector3(0f, 0.37f, -0.02f),
+                new Vector3(1.86f, 0.24f, 3.68f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Hood", root, new Vector3(0f, 0.39f, 1.63f),
+                new Vector3(1.82f, 0.12f, 1.22f), body, Quaternion.Euler(-2f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Trunk", root, new Vector3(0f, 0.43f, -1.63f),
+                new Vector3(1.80f, 0.18f, 1.10f), body, Quaternion.Euler(2f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "Sedan Roof", root, new Vector3(0f, 1.16f, -0.08f),
+                new Vector3(1.64f, 0.10f, 2.10f), body, Quaternion.identity, false);
+
+            GameObject windshield = CreatePrimitive(PrimitiveType.Cube, "Laminated Windshield", root,
+                new Vector3(0f, 0.86f, 0.88f), new Vector3(1.64f, 0.66f, 0.035f),
+                glass, Quaternion.Euler(-27f, 0f, 0f), false);
+            escapeGlassPanels.Add(windshield);
+            GameObject rearGlass = CreatePrimitive(PrimitiveType.Cube, "Rear Safety Glass", root,
+                new Vector3(0f, 0.87f, -0.92f), new Vector3(1.62f, 0.62f, 0.035f),
+                glass, Quaternion.Euler(27f, 0f, 0f), false);
+            escapeGlassPanels.Add(rearGlass);
+
+            CreatePrimitive(PrimitiveType.Cube, "A Pillar L", root, new Vector3(-0.82f, 0.88f, 0.86f),
+                new Vector3(0.08f, 0.78f, 0.10f), trim, Quaternion.Euler(-24f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "A Pillar R", root, new Vector3(0.82f, 0.88f, 0.86f),
+                new Vector3(0.08f, 0.78f, 0.10f), trim, Quaternion.Euler(-24f, 0f, 0f), false);
+            CreatePrimitive(PrimitiveType.Cube, "B Pillar L", root, new Vector3(-0.86f, 0.86f, 0.02f),
+                new Vector3(0.07f, 0.76f, 0.09f), trim, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "B Pillar R", root, new Vector3(0.86f, 0.86f, 0.02f),
+                new Vector3(0.07f, 0.76f, 0.09f), trim, Quaternion.identity, false);
+
+            escapeDoorPivot = new GameObject("Driver Door Hinge").transform;
+            escapeDoorPivot.SetParent(root, false);
+            escapeDoorPivot.localPosition = new Vector3(0.985f, 0.14f, 0.82f);
+            escapeDoorClosedRotation = Quaternion.identity;
+            escapeDoorPivot.localRotation = escapeDoorClosedRotation;
+            CreatePrimitive(PrimitiveType.Cube, "Driver Door Outer Skin", escapeDoorPivot,
+                new Vector3(0f, 0.26f, -0.69f), new Vector3(0.055f, 0.58f, 1.38f), body, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Driver Door Handle", escapeDoorPivot,
+                new Vector3(0.045f, 0.52f, -0.91f), new Vector3(0.035f, 0.045f, 0.22f), trim, Quaternion.identity, false);
+            GameObject driverGlass = CreatePrimitive(PrimitiveType.Cube, "Driver Door Safety Glass", escapeDoorPivot,
+                new Vector3(0f, 0.86f, -0.69f), new Vector3(0.030f, 0.43f, 1.24f), glass, Quaternion.identity, false);
+            escapeGlassPanels.Add(driverGlass);
+
+            CreatePrimitive(PrimitiveType.Cube, "Rear Door Outer Skin", root,
+                new Vector3(0.985f, 0.40f, -0.93f), new Vector3(0.055f, 0.60f, 1.25f), body, Quaternion.identity, false);
+            GameObject rearSideGlass = CreatePrimitive(PrimitiveType.Cube, "Rear Side Safety Glass", root,
+                new Vector3(0.985f, 0.99f, -0.92f), new Vector3(0.030f, 0.42f, 1.05f), glass, Quaternion.identity, false);
+            escapeGlassPanels.Add(rearSideGlass);
+            GameObject oppositeFrontGlass = CreatePrimitive(PrimitiveType.Cube, "Passenger Front Safety Glass", root,
+                new Vector3(-0.985f, 0.99f, 0.13f), new Vector3(0.030f, 0.42f, 1.24f), glass, Quaternion.identity, false);
+            escapeGlassPanels.Add(oppositeFrontGlass);
+            GameObject oppositeRearGlass = CreatePrimitive(PrimitiveType.Cube, "Passenger Rear Safety Glass", root,
+                new Vector3(-0.985f, 0.99f, -0.92f), new Vector3(0.030f, 0.42f, 1.05f), glass, Quaternion.identity, false);
+            escapeGlassPanels.Add(oppositeRearGlass);
+
+            CreatePrimitive(PrimitiveType.Cube, "Front Bumper", root, new Vector3(0f, 0.06f, 2.34f),
+                new Vector3(1.82f, 0.18f, 0.12f), trim, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Rear Bumper", root, new Vector3(0f, 0.08f, -2.34f),
+                new Vector3(1.82f, 0.18f, 0.12f), trim, Quaternion.identity, false);
+            CreatePrimitive(PrimitiveType.Cube, "Front Grille", root, new Vector3(0f, 0.20f, 2.405f),
+                new Vector3(0.82f, 0.20f, 0.035f), trim, Quaternion.identity, false);
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                CreatePrimitive(PrimitiveType.Cube, "LED Headlamp", root,
+                    new Vector3(side * 0.62f, 0.33f, 2.405f), new Vector3(0.38f, 0.16f, 0.035f),
+                    headlight, Quaternion.identity, false);
+                CreatePrimitive(PrimitiveType.Cube, "LED Tail Lamp", root,
+                    new Vector3(side * 0.64f, 0.35f, -2.405f), new Vector3(0.34f, 0.18f, 0.035f),
+                    tailLight, Quaternion.identity, false);
+            }
 
             for (int side = -1; side <= 1; side += 2)
             {
                 for (int end = -1; end <= 1; end += 2)
                 {
-                    CreatePrimitive(PrimitiveType.Cylinder, "Escape Car Wheel", root,
-                        new Vector3(side * 0.98f, -0.18f, end * 1.42f),
-                        new Vector3(0.31f, 0.16f, 0.31f), dark,
-                        Quaternion.Euler(0f, 0f, 90f), false);
+                    Vector3 wheelPosition = new Vector3(side * 1.00f, -0.18f, end * 1.48f);
+                    CreatePrimitive(PrimitiveType.Cylinder, "Performance Tire", root, wheelPosition,
+                        new Vector3(0.34f, 0.17f, 0.34f), tire, Quaternion.Euler(0f, 0f, 90f), false);
+                    CreatePrimitive(PrimitiveType.Cylinder, "Alloy Wheel", root,
+                        wheelPosition + new Vector3(side * 0.012f, 0f, 0f),
+                        new Vector3(0.22f, 0.175f, 0.22f), rim, Quaternion.Euler(0f, 0f, 90f), false);
                 }
             }
-
             return root;
         }
 

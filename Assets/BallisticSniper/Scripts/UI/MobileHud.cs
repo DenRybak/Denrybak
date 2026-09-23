@@ -21,6 +21,7 @@ namespace BallisticSniper
         public int TargetsCleared;
         public int TargetTotal;
         public int ShotsRemaining;
+        public bool UnlimitedShots;
         public int Score;
         public bool BonusMode;
         public bool CanFire;
@@ -336,7 +337,7 @@ namespace BallisticSniper
                     ? (snapshot.TargetTotal > 1 ? "ЦЕЛИ ПОДТВЕРЖДЕНЫ" : "ЦЕЛЬ ПОДТВЕРЖДЕНА")
                     : "ЦЕЛИ " + snapshot.TargetsCleared + "/" + snapshot.TargetTotal
                 : snapshot.BonusMode ? "БОНУСНАЯ СТАЛЬ" : snapshot.TargetsCleared + "/" + snapshot.TargetTotal + " ЦЕЛЕЙ";
-            ammoText.text = snapshot.ShotsRemaining + " ПАТР.";
+            ammoText.text = snapshot.UnlimitedShots ? "∞ ПАТР." : snapshot.ShotsRemaining + " ПАТР.";
             scoreText.text = snapshot.Score.ToString(CultureInfo.InvariantCulture);
             elevationText.text = string.Format(CultureInfo.InvariantCulture, "{0:+0.0;-0.0;0.0}", snapshot.ElevationDial);
             elevationCalcText.text = string.Format(CultureInfo.InvariantCulture, "РАСЧЁТ  +{0:0.0}", snapshot.Solution.ElevationMil);
@@ -555,7 +556,7 @@ namespace BallisticSniper
             weaponButton = CreateButton(menuRoot.transform, "Weapon Selection", "ОРУЖИЕ", new Vector2(0.81f, 0.49f), new Vector2(0.94f, 0.61f), game.CycleWeapon, false);
             weaponButton.GetComponentInChildren<Text>().fontSize = 17;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.67f, 0.36f), new Vector2(0.94f, 0.46f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.5.0  •  Миссии + тренировка  •  Оффлайн";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.6.0  •  Миссии + тренировка  •  Оффлайн";
         }
 
         private void CreateHelp()

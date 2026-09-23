@@ -35,6 +35,7 @@ namespace BallisticSniper
         private readonly Shader transparentShader;
         private readonly Shader unlitShader;
         private readonly Shader tracerShader;
+        private readonly Shader tracerGlowShader;
 
         public MaterialLibrary()
         {
@@ -57,6 +58,13 @@ namespace BallisticSniper
             {
                 throw new System.InvalidOperationException(
                     "Required BallisticSniper/TracerTrail shader is missing from Resources.");
+            }
+            tracerGlowShader = Resources.Load<Shader>("BallisticSniper/Shaders/TracerGlow") ??
+                               Shader.Find("BallisticSniper/TracerGlow");
+            if (tracerGlowShader == null)
+            {
+                throw new System.InvalidOperationException(
+                    "Required BallisticSniper/TracerGlow shader is missing from Resources.");
             }
         }
 
@@ -121,6 +129,17 @@ namespace BallisticSniper
             Material material = new Material(tracerShader) { name = "MAT_Tracer" + suffix };
             if (material.HasProperty("_Color")) material.SetColor("_Color", tint);
             material.renderQueue = 3000;
+            materials[key] = material;
+            return material;
+        }
+
+        public Material TracerGlow(Color tint, string suffix = "")
+        {
+            string key = "tracer_glow|" + ColorUtility.ToHtmlStringRGBA(tint) + "|" + suffix;
+            if (materials.TryGetValue(key, out Material cached)) return cached;
+            Material material = new Material(tracerGlowShader) { name = "MAT_TracerGlow" + suffix };
+            if (material.HasProperty("_Color")) material.SetColor("_Color", tint);
+            material.renderQueue = 3001;
             materials[key] = material;
             return material;
         }

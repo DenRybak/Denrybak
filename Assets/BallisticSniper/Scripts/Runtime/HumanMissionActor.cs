@@ -62,7 +62,14 @@ namespace BallisticSniper
         private Transform rideVehicle;
         private Vector3 rideSeatLocal;
         private Vector3 rideEntryStart;
+        private Vector3 rideDoorWorld;
         private float rideStartClock;
+        private bool escapeSequence;
+        private bool seatedInVehicle;
+
+        private const float EscapeReactionSeconds = 1.0f;
+        private const float EscapeRunSeconds = 1.85f;
+        private const float EscapeBoardSeconds = 1.10f;
 
         private Transform chest;
         private Transform pelvis;
@@ -78,6 +85,7 @@ namespace BallisticSniper
 
         public bool IsPrimary { get; private set; }
         public bool IsRagdolled => ragdolled;
+        public bool IsSeatedInVehicle => seatedInVehicle;
         public Vector3 AimCentre => transform.position + Vector3.up * 1.34f;
         public Vector3 ReplayFocus => chest != null ? chest.position : AimCentre;
         public float Depth => transform.position.z;
@@ -116,13 +124,21 @@ namespace BallisticSniper
             return actor;
         }
 
-        public void BeginVehicleEscape(Transform vehicle, Vector3 localSeat, float clock)
+        public void BeginVehicleEscape(
+            Transform vehicle,
+            Vector3 doorWorldPosition,
+            Vector3 localSeat,
+            float clock)
         {
             if (ragdolled || vehicle == null) return;
             rideVehicle = vehicle;
             rideSeatLocal = localSeat;
             rideEntryStart = transform.position;
+            rideDoorWorld = doorWorldPosition;
+            rideDoorWorld.y = rideEntryStart.y;
             rideStartClock = clock;
+            escapeSequence = true;
+            seatedInVehicle = false;
             motion = HumanMotionStyle.Static;
             hasPreviousKinematicPosition = false;
         }
@@ -131,17 +147,76 @@ namespace BallisticSniper
         {
             if (ragdolled) return;
 
-            if (rideVehicle != null)
+            if (escapeSequence && rideVehicle != null)
             {
-                float entry = Mathf.Clamp01((clock - rideStartClock) / 0.95f);
-                float eased = entry * entry * (3f - 2f * entry);
-                Vector3 seat = rideVehicle.TransformPoint(rideSeatLocal);
-                Vector3 ridePosition = Vector3.Lerp(rideEntryStart, seat, eased);
-                ridePosition += Vector3.up * (Mathf.Sin(entry * Mathf.PI) * 0.42f);
-                transform.position = ridePosition;
+                float elapsed = Mathf.Max(0f, clock - rideStartClock);
+                float reactionEnd = EscapeReactionSeconds;
+                float runEnd = reactionEnd + EscapeRunSeconds;
+                float boardEnd = runEnd + EscapeBoardSeconds;
+                Vector3 doorTarget = rideDoorWorld;
+
+                if (elapsed < reactionEnd)
+                {
+                    motion = HumanMotionStyle.Static;
+                    float react = Mathf.SmoothStep(0f, 1f, elapsed / reactionEnd);
+                    Vector3 toDoor = doorTarget - transform.position;
+                    if (toDoor.sqrMagnitude > 0.0001f)
+                    {
+                        float doorYaw = Mathf.Atan2(toDoor.x, toDoor.z) * Mathf.Rad2Deg;
+                        facingYaw = Mathf.LerpAngle(facingYaw, doorYaw, react * 0.72f);
+                    }
+                    transform.position = rideEntryStart;
+                    transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
+                    AnimatePose(clock, Mathf.Sin(clock * 5.0f + phase) * react * 0.32f, 0f, 0f);
+                    return;
+                }
+
+                if (elapsed < runEnd)
+                {
+                    motion = HumanMotionStyle.TargetPatrol;
+                    float runT = Mathf.Clamp01((elapsed - reactionEnd) / EscapeRunSeconds);
+                    float eased = runT * runT * (3f - 2f * runT);
+                    Vector3 previous = transform.position;
+                    Vector3 runPosition = Vector3.Lerp(rideEntryStart, doorTarget, eased);
+                    Vector3 move = runPosition - previous;
+                    transform.position = runPosition;
+                    if (move.sqrMagnitude > 0.000001f)
+                    {
+                        facingYaw = Mathf.Atan2(move.x, move.z) * Mathf.Rad2Deg;
+                        walkCycle += move.magnitude / 0.54f * Mathf.PI * 2f;
+                    }
+                    transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
+                    AnimatePose(clock, Mathf.Sin(clock * 2.6f + phase), 1f, 3.1f);
+                    return;
+                }
+
+                if (elapsed < boardEnd)
+                {
+                    motion = HumanMotionStyle.Static;
+                    float boardT = Mathf.Clamp01((elapsed - runEnd) / EscapeBoardSeconds);
+                    float eased = Mathf.SmoothStep(0f, 1f, boardT);
+                    Vector3 seat = rideVehicle.TransformPoint(rideSeatLocal);
+                    Vector3 boardPosition = Vector3.Lerp(doorTarget, seat, eased);
+                    boardPosition += Vector3.up * Mathf.Sin(boardT * Mathf.PI) * 0.18f;
+                    transform.position = boardPosition;
+                    facingYaw = Mathf.LerpAngle(
+                        facingYaw,
+                        rideVehicle.eulerAngles.y,
+                        Mathf.SmoothStep(0f, 1f, boardT));
+                    transform.rotation = Quaternion.Euler(
+                        Mathf.Lerp(0f, 8f, Mathf.Sin(boardT * Mathf.PI)),
+                        facingYaw,
+                        Mathf.Lerp(0f, -5f, Mathf.Sin(boardT * Mathf.PI)));
+                    AnimatePose(clock, 0f, 0f, 0f);
+                    return;
+                }
+
+                motion = HumanMotionStyle.Static;
+                seatedInVehicle = true;
+                transform.position = rideVehicle.TransformPoint(rideSeatLocal);
                 facingYaw = rideVehicle.eulerAngles.y;
                 transform.rotation = Quaternion.Euler(0f, facingYaw, 0f);
-                AnimatePose(clock, Mathf.Sin(clock * 1.72f + phase), 0f, entry < 1f ? 0.35f : 0f);
+                AnimatePose(clock, 0f, 0f, 0f);
                 return;
             }
 
@@ -286,6 +361,9 @@ namespace BallisticSniper
         {
             if (ragdolled) return;
             ragdolled = true;
+            escapeSequence = false;
+            seatedInVehicle = false;
+            rideVehicle = null;
             LastHitZone = HitZoneAt(impactPoint);
 
             Rigidbody struck = null;

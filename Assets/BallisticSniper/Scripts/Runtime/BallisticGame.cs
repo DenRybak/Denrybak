@@ -8,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.5.0";
+        public const string GameVersion = "5.6.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
@@ -196,6 +196,19 @@ namespace BallisticSniper
                 case GameScreen.Playing:
                     sceneClock += dt;
                     world.TickTargets(sceneClock);
+                    if (ElevatedEscapeOperation &&
+                        targetsCleared == 1 &&
+                        !operationComplete &&
+                        !operationFailed &&
+                        world.EscapeTargetLost)
+                    {
+                        operationFailed = true;
+                        lastHumanHit = null;
+                        lastHumanWasPrimary = false;
+                        lastShotScore = 0;
+                        EnterResult(0f);
+                        break;
+                    }
                     UpdateBreath(dt);
                     UpdateWind();
                     UpdateSway();
@@ -506,6 +519,11 @@ namespace BallisticSniper
                     }
                     return;
                 }
+                if (ElevatedEscapeOperation)
+                {
+                    ReturnToAimAfterReview();
+                    return;
+                }
                 if (shotInStage < ActiveShotsPerStage)
                 {
                     ReturnToAimAfterReview();
@@ -688,8 +706,10 @@ namespace BallisticSniper
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
             Material tracerMaterial = world.Materials.Tracer(
-                new Color(1.00f, 0.72f, 0.30f, 0.92f), "_TracerV550");
-            killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial);
+                new Color(1.00f, 0.78f, 0.36f, 0.98f), "_TracerV560");
+            Material glowMaterial = world.Materials.TracerGlow(
+                new Color(1.00f, 0.44f, 0.08f, 0.24f), "_TracerGlowV560");
+            killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial, glowMaterial);
         }
 
         private void PrepareCampaignForMenu(bool rebuildWorld)
@@ -893,7 +913,8 @@ namespace BallisticSniper
         private bool CanAcceptFire()
         {
             return screen == GameScreen.Playing &&
-                   shotInStage < ActiveShotsPerStage &&
+                   (ElevatedEscapeOperation || shotInStage < ActiveShotsPerStage) &&
+                   !operationFailed &&
                    Time.unscaledTime >= fireReadyAt;
         }
 
@@ -902,12 +923,14 @@ namespace BallisticSniper
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
             Material tracerMaterial = world.Materials.Tracer(
-                new Color(1.00f, 0.72f, 0.30f, 0.92f), "_TracerV550");
+                new Color(1.00f, 0.78f, 0.36f, 0.98f), "_TracerV560");
+            Material glowMaterial = world.Materials.TracerGlow(
+                new Color(1.00f, 0.44f, 0.08f, 0.24f), "_TracerGlowV560");
             GameObject bullet = ProjectileVisualFactory.Create(
                 "Visible " + SelectedWeapon.Calibre + " Projectile", bulletMaterial);
             bullet.transform.SetParent(transform, true);
             activeProjectile = bullet.AddComponent<ProjectileTracer>();
-            activeProjectile.Begin(currentShot, tracerMaterial, ResolveShot);
+            activeProjectile.Begin(currentShot, tracerMaterial, glowMaterial, ResolveShot);
         }
 
         private void ResolveShot()
@@ -1034,6 +1057,9 @@ namespace BallisticSniper
                 lastError = new Vector2(currentShot.Impact.x, currentShot.Impact.y - CameraHeight);
             }
 
+            bool escapeMission = ElevatedEscapeOperation;
+            bool glassBroken = world.TryShatterOperationGlass(currentShot.Impact);
+            if (glassBroken) PlaySound("glass_break", 0.88f, 1.08f);
             bool blocked = world.IsOperationImpactBlocked(currentShot.Impact);
             bool humanHit = actor != null && actor.ContainsImpact(currentShot.Impact) && !blocked;
             if (humanHit)
@@ -1059,8 +1085,6 @@ namespace BallisticSniper
                     lastShotScore = 100;
                     score += lastShotScore;
 
-                    bool escapeMission =
-                        GameRules.OperationDefinitions[stage].Kind == OperationKind.EscapeVehicle;
                     operationComplete = !escapeMission ||
                         targetsCleared >= GameRules.OperationTargetCount(stage);
                 }
@@ -1072,7 +1096,10 @@ namespace BallisticSniper
 
             totalShots++;
             shotInStage++;
-            if (!humanHit && shotInStage >= ActiveShotsPerStage) operationFailed = true;
+            if (!humanHit && !escapeMission && shotInStage >= ActiveShotsPerStage)
+                operationFailed = true;
+            if (escapeMission && world.EscapeTargetLost && !operationComplete)
+                operationFailed = true;
 
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "BALLISTIC_ANDROID_OPERATION_RESOLVED stage={0} hit={1} primary={2} blocked={3} ragdoll={4} weapon={5} error={6:+0.000;-0.000;0.000},{7:+0.000;-0.000;0.000}",
@@ -1089,6 +1116,10 @@ namespace BallisticSniper
             if (humanHit)
             {
                 BeginKillCam();
+            }
+            else if (escapeMission && !operationFailed)
+            {
+                ReturnToAimAfterReview();
             }
             else
             {
@@ -1316,9 +1347,11 @@ namespace BallisticSniper
                             ? "ПОДТВЕРЖДЕНИЕ • ВТОРАЯ ЦЕЛЬ УХОДИТ НА АВТО"
                             : "ПОДТВЕРЖДЕНИЕ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant() + " • RAGDOLL")
                         : "ПОСТОРОННИЙ ЗАДЕТ • " + lastHumanHit.LastHitZone.ToString().ToUpperInvariant()
-                    : world.IsOperationImpactBlocked(currentShot.Impact)
-                        ? "ПУЛЯ ОСТАНОВЛЕНА УКРЫТИЕМ"
-                        : "ЦЕЛЬ НЕ ПОРАЖЕНА"
+                    : ElevatedEscapeOperation && world.EscapeTargetLost
+                        ? "ЦЕЛЬ УШЛА ИЗ СЕКТОРА НА АВТОМОБИЛЕ"
+                        : world.IsOperationImpactBlocked(currentShot.Impact)
+                            ? "ПУЛЯ ОСТАНОВЛЕНА УКРЫТИЕМ"
+                            : "ЦЕЛЬ НЕ ПОРАЖЕНА"
                 : lastChainReaction > 0 && lastReviewedTarget != null
                 ? GameRules.TargetName(lastReviewedTarget.Kind) + " • +" + lastChainReaction + " ЦЕЛЬ"
                 : lastHitDestructible && lastReviewedTarget != null
@@ -1326,7 +1359,7 @@ namespace BallisticSniper
                     : lastBonusShot ? "БОНУСНАЯ СТАЛЬ • ОЧКИ ×2"
                     : lastShotScore > 0 ? "СТАЛЬНАЯ МИШЕНЬ" : "МЕТКА — МЕСТО ПУЛИ";
 
-            bool stageFinished = shotInStage >= ActiveShotsPerStage;
+            bool stageFinished = !ElevatedEscapeOperation && shotInStage >= ActiveShotsPerStage;
             string actionLabel;
             if (campaignMode == CampaignMode.Operations)
             {
@@ -1375,7 +1408,8 @@ namespace BallisticSniper
                 HoldingBreath = holdingBreath,
                 TargetsCleared = targetsCleared,
                 TargetTotal = ActiveTargetsPerStage,
-                ShotsRemaining = ActiveShotsPerStage - shotInStage,
+                ShotsRemaining = ElevatedEscapeOperation ? 0 : Mathf.Max(0, ActiveShotsPerStage - shotInStage),
+                UnlimitedShots = ElevatedEscapeOperation,
                 Score = score,
                 BonusMode = bonusMode,
                 CanFire = canFire && CanAcceptFire(),

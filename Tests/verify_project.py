@@ -138,7 +138,7 @@ def main() -> int:
         "image.raycastTarget = false",
         "image.texture = uiTexture",
         'label.text = (selected ? "✓ " : string.Empty)',
-        '"v5.5.0  •  Миссии + тренировка',
+        '"v5.6.0  •  Миссии + тренировка',
         "game.StartMissions",
         "game.StartTraining",
         "TapTrainingThroughStandardClickForTests",
@@ -205,6 +205,8 @@ def main() -> int:
         "ReplayFocus",
         "_PrimaryJacketV53",
         "BeginVehicleEscape",
+        "EscapeReactionSeconds = 1.0f",
+        "IsSeatedInVehicle",
     )
     mesh_tokens = ("private static Mesh Lathe", "private static Mesh Ellipsoid", "RecalculateNormals", "RecalculateTangents")
     if any(token not in human_actor for token in human_tokens) or any(token not in human_mesh for token in mesh_tokens):
@@ -233,7 +235,11 @@ def main() -> int:
         "CreateEscapeVehicle",
         "BeginEscapeAfterFirstTarget",
         "High Shooter Tower",
-        "ESCAPE VEHICLE — DARK SEDAN",
+        "ESCAPE VEHICLE — PREMIUM DARK SEDAN",
+        "TryShatterOperationGlass",
+        "Vehicle Safety Glass Shard",
+        "Driver Door Hinge",
+        "EscapeTargetLost",
     )
     shader_tokens = ("_NormalStrength", "o.Normal = detailNormal", "o.Occlusion")
     grade_tokens = ("1.0h - exp(-hdr * _Exposure)", '"_Saturation", 1.02f', '"_Sharpness", 0.08f')
@@ -255,12 +261,14 @@ def main() -> int:
         "trail.numCapVertices = 14",
         "trail.colorGradient = killGradient",
         "new GradientAlphaKey(0.94f, 0f)",
+        "glowTrail.widthMultiplier = 0.0042f",
+        "Soft Tracer Glow",
         "trail.receiveShadows = false",
         "impactHighlight.transform.localScale = Vector3.one * 0.012f",
         "fieldOfView = 24f",
     )
     if any(token not in projectile for token in polish_tokens):
-        raise AssertionError("v5.5.0 bright thin tracer + escape mission is missing")
+        raise AssertionError("v5.6.0 bright thin tracer + escape mission is missing")
 
     playmode_test = require("Assets/BallisticSniper/Tests/PlayMode/CampaignLaunchSmokeTests.cs").read_text(encoding="utf-8")
     test_tokens = (
@@ -292,10 +300,10 @@ def main() -> int:
     configurator = require("Assets/BallisticSniper/Scripts/Editor/ProjectConfigurator.cs").read_text(encoding="utf-8")
     build_tokens = (
         'PlayerSettings.productName = "Ballistic Sniper 5 Preview"',
-        'PlayerSettings.bundleVersion = "5.5.0-unity"',
+        'PlayerSettings.bundleVersion = "5.6.0-unity"',
         '"com.denis.ballisticsniper.v5preview"',
-        '"Ballistic-Sniper-Unity-v5.5.0.apk"',
-        "PlayerSettings.Android.bundleVersionCode = 18",
+        '"Ballistic-Sniper-Unity-v5.6.0.apk"',
+        "PlayerSettings.Android.bundleVersionCode = 19",
         "AndroidArchitecture.X86_64",
     )
     if any(token not in configurator for token in build_tokens):
@@ -319,13 +327,18 @@ def main() -> int:
         "Assets/BallisticSniper/Scripts/Runtime/MaterialLibrary.cs"
     ).read_text(encoding="utf-8")
     tracer_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/TracerTrail.shader").read_text(encoding="utf-8")
+    tracer_glow_shader = require("Assets/BallisticSniper/Resources/BallisticSniper/Shaders/TracerGlow.shader").read_text(encoding="utf-8")
     if ('Resources.Load<Shader>("BallisticSniper/Shaders/TransparentLit")' not in material_library or
             'Resources.Load<Shader>("BallisticSniper/Shaders/TracerTrail")' not in material_library or
+            'Resources.Load<Shader>("BallisticSniper/Shaders/TracerGlow")' not in material_library or
             "public Material Tracer(" not in material_library or
+            "public Material TracerGlow(" not in material_library or
             "unlitShader = litShader" not in material_library or
             "public Material MetallicSolid(" not in material_library or
             'Blend SrcAlpha OneMinusSrcAlpha' not in tracer_shader or
-            'ZWrite Off' not in tracer_shader):
+            'ZWrite Off' not in tracer_shader or
+            'Blend SrcAlpha One' not in tracer_glow_shader or
+            'ZWrite Off' not in tracer_glow_shader):
         raise AssertionError("runtime materials still depend on a strippable built-in shader")
 
     android_test = require("Tools/verify_android_start.sh").read_text(encoding="utf-8")
