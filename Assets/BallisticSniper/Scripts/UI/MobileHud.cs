@@ -290,10 +290,12 @@ namespace BallisticSniper
             briefingKicker.text = "ОПЕРАЦИЯ " + (stage + 1) + " / " + GameRules.OperationStages + "  •  НЕ ЗАДЕНЬТЕ ПОСТОРОННИХ";
             briefingTitle.text = definition.Name;
             briefingNote.text = definition.Note + "\nЦЕЛЬ: " + definition.TargetDescription;
+            int operationTargetCount = definition.Kind == OperationKind.EscapeVehicle ? 2 : 1;
             briefingStats.text = string.Format(CultureInfo.InvariantCulture,
-                "ДИСТАНЦИЯ\n{0} м\n\nВЕТЕР\n{1:0.0} м/с\n\nЦЕЛЬ\n1\n\nПАТРОНОВ\n{2}",
+                "ДИСТАНЦИЯ\n{0} м\n\nВЕТЕР\n{1:0.0} м/с\n\nЦЕЛЕЙ\n{2}\n\nПАТРОНОВ\n{3}",
                 definition.RangeMetres,
                 Mathf.Abs(wind),
+                operationTargetCount,
                 definition.Shots);
             briefingSolution.text = string.Format(CultureInfo.InvariantCulture,
                 "СЛОЖНОСТЬ\n{0}\n\n{1} • {2}\nTOF {3:0.00} с  •  ELEV +{4:0.0} MIL  •  WIND {5}",
@@ -330,7 +332,9 @@ namespace BallisticSniper
             string arrow = snapshot.Wind >= 0f ? "→" : "←";
             windText.text = string.Format(CultureInfo.InvariantCulture, "ВЕТЕР  {0}  {1:0.0} м/с", arrow, Mathf.Abs(snapshot.Wind));
             targetText.text = snapshot.Mode == CampaignMode.Operations
-                ? snapshot.TargetsCleared > 0 ? "ЦЕЛЬ ПОДТВЕРЖДЕНА" : "ЦЕЛЬ 0/1"
+                ? snapshot.TargetsCleared >= snapshot.TargetTotal
+                    ? (snapshot.TargetTotal > 1 ? "ЦЕЛИ ПОДТВЕРЖДЕНЫ" : "ЦЕЛЬ ПОДТВЕРЖДЕНА")
+                    : "ЦЕЛИ " + snapshot.TargetsCleared + "/" + snapshot.TargetTotal
                 : snapshot.BonusMode ? "БОНУСНАЯ СТАЛЬ" : snapshot.TargetsCleared + "/" + snapshot.TargetTotal + " ЦЕЛЕЙ";
             ammoText.text = snapshot.ShotsRemaining + " ПАТР.";
             scoreText.text = snapshot.Score.ToString(CultureInfo.InvariantCulture);
@@ -551,7 +555,7 @@ namespace BallisticSniper
             weaponButton = CreateButton(menuRoot.transform, "Weapon Selection", "ОРУЖИЕ", new Vector2(0.81f, 0.49f), new Vector2(0.94f, 0.61f), game.CycleWeapon, false);
             weaponButton.GetComponentInChildren<Text>().fontSize = 17;
             CreateButton(menuRoot.transform, "Help", "КАК ИГРАТЬ", new Vector2(0.67f, 0.36f), new Vector2(0.94f, 0.46f), game.OpenHelp, false);
-            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.4.2  •  Миссии + тренировка  •  Оффлайн";
+            CreateText(menuRoot.transform, "Offline", new Vector2(0.56f, 0.035f), new Vector2(0.95f, 0.08f), 17, TextAnchor.MiddleRight, new Color32(255, 255, 255, 150)).text = "v5.5.0  •  Миссии + тренировка  •  Оффлайн";
         }
 
         private void CreateHelp()
