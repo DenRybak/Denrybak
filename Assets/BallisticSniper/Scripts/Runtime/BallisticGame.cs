@@ -8,7 +8,7 @@ namespace BallisticSniper
     public sealed class BallisticGame : MonoBehaviour
     {
         public const float CameraHeight = 1.65f;
-        public const string GameVersion = "5.6.0";
+        public const string GameVersion = "5.7.0";
         private const float MilToDegrees = 0.05729578f;
         private const float BaseScopeFov = 52f;
 
