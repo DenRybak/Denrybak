@@ -102,7 +102,9 @@ def main() -> int:
         raise AssertionError("operations campaign must define exactly four missions")
     if game_data.count("new WeaponDefinition(") != 3:
         raise AssertionError("weapon selector must define exactly three rifles")
-    if "public const int OperationStages = 4;" not in game_data or "public const int OperationTargets = 5;" not in game_data:
+    if ("public const int OperationStages = 4;" not in game_data or
+            "public const int OperationTargets = 5;" not in game_data or
+            "public const int OperationMaxScore = 500;" not in game_data):
         raise AssertionError("four-operation/two-target mission totals are missing")
     if "OperationKind.EscapeVehicle" not in game_data or "ВЫСОТНЫЙ ПЕРЕХВАТ" not in game_data:
         raise AssertionError("elevated escape vehicle mission is missing")
@@ -252,6 +254,7 @@ def main() -> int:
         "trail.numCornerVertices = 16",
         "trail.numCapVertices = 14",
         "trail.colorGradient = killGradient",
+        "new GradientAlphaKey(0.94f, 0f)",
         "trail.receiveShadows = false",
         "impactHighlight.transform.localScale = Vector3.one * 0.012f",
         "fieldOfView = 24f",
@@ -273,6 +276,7 @@ def main() -> int:
         "runtime-world-v5.0.0.png",
         "runtime-operation-v5.0.0.png",
         "OperationsBuildCharactersAndReleaseARealJointedRagdoll",
+        "EscapeOperationHasTwoTargetsAndMovingVehiclePassenger",
         "CharacterJoint",
         "ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred",
         "ResultActionOverlapsFireForTests",
