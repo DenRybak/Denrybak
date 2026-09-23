@@ -161,10 +161,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.78f, 0f),
-                    new GradientAlphaKey(0.50f, 0.24f),
-                    new GradientAlphaKey(0.20f, 0.64f),
-                    new GradientAlphaKey(0.035f, 0.88f),
+                    new GradientAlphaKey(0.88f, 0f),
+                    new GradientAlphaKey(0.62f, 0.24f),
+                    new GradientAlphaKey(0.28f, 0.64f),
+                    new GradientAlphaKey(0.060f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = flightGradient;
@@ -282,10 +282,10 @@ namespace BallisticSniper
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.86f, 0f),
-                    new GradientAlphaKey(0.58f, 0.24f),
-                    new GradientAlphaKey(0.25f, 0.62f),
-                    new GradientAlphaKey(0.055f, 0.88f),
+                    new GradientAlphaKey(0.94f, 0f),
+                    new GradientAlphaKey(0.68f, 0.24f),
+                    new GradientAlphaKey(0.32f, 0.62f),
+                    new GradientAlphaKey(0.080f, 0.88f),
                     new GradientAlphaKey(0f, 1f)
                 });
             trail.colorGradient = killGradient;
