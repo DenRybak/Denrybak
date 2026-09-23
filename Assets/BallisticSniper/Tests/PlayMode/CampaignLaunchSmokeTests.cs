@@ -181,6 +181,49 @@ namespace BallisticSniper.Tests
         }
 
         [UnityTest]
+        public IEnumerator EscapeOperationHasTwoTargetsAndMovingVehiclePassenger()
+        {
+            yield return null;
+
+            RangeWorld world = Object.FindObjectOfType<RangeWorld>();
+            Assert.That(world, Is.Not.Null);
+            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(4));
+            Assert.That(GameRules.OperationTargetCount(3), Is.EqualTo(2));
+
+            world.BuildStage(3, Difficulty.Cadet, CampaignMode.Operations);
+            yield return null;
+
+            HumanMissionActor first = null;
+            HumanMissionActor second = null;
+            for (int i = 0; i < world.Humans.Count; i++)
+            {
+                HumanMissionActor actor = world.Humans[i];
+                if (!actor.IsPrimary) continue;
+                if (first == null) first = actor;
+                else if (second == null) second = actor;
+            }
+
+            Assert.That(first, Is.Not.Null, "First escape target is missing");
+            Assert.That(second, Is.Not.Null, "Second escape target is missing");
+            Vector3 before = second.transform.position;
+
+            Assert.That(world.BeginEscapeAfterFirstTarget(first, 0f), Is.True,
+                "The surviving target did not enter the escape sequence");
+            world.TickTargets(0.48f);
+            Vector3 entry = second.transform.position;
+            Assert.That(entry.y, Is.GreaterThan(before.y + 0.05f),
+                "The surviving target did not jump into the vehicle");
+
+            world.TickTargets(2.25f);
+            Vector3 moving = second.transform.position;
+            Assert.That(Vector3.Distance(moving, before), Is.GreaterThan(0.8f),
+                "The target-in-car did not move through the firing sector");
+
+            world.BuildStage(0, Difficulty.Cadet, CampaignMode.Operations);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator ShotReviewReturnsToAimWithoutFiringAndKeepsOpticsCentred()
         {
             yield return null;
