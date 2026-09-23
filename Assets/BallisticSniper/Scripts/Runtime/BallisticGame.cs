@@ -688,7 +688,7 @@ namespace BallisticSniper
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
             Material tracerMaterial = world.Materials.Tracer(
-                new Color(1.00f, 0.66f, 0.24f, 0.82f), "_TracerV542");
+                new Color(1.00f, 0.72f, 0.30f, 0.92f), "_TracerV550");
             killCam.Initialize(playerCamera, bulletMaterial, tracerMaterial);
         }
 
@@ -902,7 +902,7 @@ namespace BallisticSniper
             Material bulletMaterial = world.Materials.MetallicSolid(
                 new Color(0.78f, 0.42f, 0.16f), 0.82f, 0.86f, "_BulletCopperV54");
             Material tracerMaterial = world.Materials.Tracer(
-                new Color(1.00f, 0.66f, 0.24f, 0.82f), "_TracerV542");
+                new Color(1.00f, 0.72f, 0.30f, 0.92f), "_TracerV550");
             GameObject bullet = ProjectileVisualFactory.Create(
                 "Visible " + SelectedWeapon.Calibre + " Projectile", bulletMaterial);
             bullet.transform.SetParent(transform, true);
