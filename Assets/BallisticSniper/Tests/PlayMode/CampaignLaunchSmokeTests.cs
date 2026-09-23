@@ -186,7 +186,7 @@ namespace BallisticSniper.Tests
             yield return null;
             RangeWorld world = Object.FindObjectOfType<RangeWorld>();
             Assert.That(world, Is.Not.Null);
-            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(4));
+            Assert.That(GameRules.OperationDefinitions.Length, Is.EqualTo(5));
             Assert.That(GameRules.OperationTargetCount(3), Is.EqualTo(2));
 
             world.BuildStage(3, Difficulty.Cadet, CampaignMode.Operations);
@@ -229,6 +229,30 @@ namespace BallisticSniper.Tests
             yield return null;
             Assert.That(world.TryShatterOperationGlass(new Vector3(0f, 1.56f, 420f)), Is.True,
                 "Hotel window glass did not shatter on impact");
+
+            world.BuildStage(0, Difficulty.Cadet, CampaignMode.Operations);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator OfficerBriefingIsFifthMissionAt1000MetresAndOpticReaches100x()
+        {
+            yield return null;
+            RangeWorld world = Object.FindObjectOfType<RangeWorld>();
+            Assert.That(world, Is.Not.Null);
+            Assert.That(GameRules.OperationStages, Is.EqualTo(5));
+            Assert.That(GameRules.OperationTargets, Is.EqualTo(6));
+            Assert.That(GameRules.OperationDefinitions[4].Kind, Is.EqualTo(OperationKind.OfficerBriefing));
+            Assert.That(GameRules.OperationDefinitions[4].RangeMetres, Is.EqualTo(1000));
+            Assert.That(GameRules.ZoomLevels[GameRules.ZoomLevels.Length - 1], Is.EqualTo(100));
+
+            world.BuildStage(4, Difficulty.Cadet, CampaignMode.Operations);
+            yield return null;
+            Assert.That(world.Humans.Count, Is.GreaterThanOrEqualTo(6),
+                "The 1000 m briefing scene needs the officer plus surrounding soldiers");
+            Assert.That(world.PrimaryHuman, Is.Not.Null);
+            Assert.That(world.PrimaryHuman.name, Does.Contain("OFFICER"),
+                "The primary target is not the briefing officer");
 
             world.BuildStage(0, Difficulty.Cadet, CampaignMode.Operations);
             yield return null;
