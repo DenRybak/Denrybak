@@ -3,7 +3,6 @@ package md.leia.launcher;
 import android.app.*;
 import android.content.*;
 import android.graphics.PixelFormat;
-import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
@@ -142,33 +141,22 @@ public class WakeService extends Service implements RecognitionListener {
         listeningEnabled = false;
 
         releaseRecognizer();
-        updateNotification("«Ок, Лея» услышано — запускаю ChatGPT Voice");
+        updateNotification("«Ок, Лея» услышано — освобождаю микрофон");
 
         handler.postDelayed(() -> {
-            try {
-                Intent voice = new Intent(Intent.ACTION_VIEW, Uri.parse("https://chatgpt.com/"));
-                voice.setPackage("com.openai.chatgpt");
-                voice.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(voice);
-            } catch (Throwable first) {
-                try {
-                    Intent launch = getPackageManager().getLaunchIntentForPackage("com.openai.chatgpt");
-                    if (launch != null) {
-                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                        startActivity(launch);
-                    } else {
-                        Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse("https://chatgpt.com/"));
-                        browser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(browser);
-                    }
-                } catch (Throwable ignored) {
-                    updateNotification("Не удалось открыть ChatGPT");
-                    launching = false;
-                }
-            }
+            GptLauncher.Result result = GptLauncher.launch(this);
 
-            updateNotification("ChatGPT открыт. Для следующего вызова нажми «Возобновить».");
-        }, 450);
+            if (result == GptLauncher.Result.DIRECT) {
+                updateNotification("ChatGPT Voice запущен напрямую");
+            } else if (result == GptLauncher.Result.DEEPLINK) {
+                updateNotification("ChatGPT Voice запущен через mode=voice");
+            } else {
+                updateNotification("Не удалось запустить Voice. Открой приложение «Ок, Лея»");
+                launching = false;
+                listeningEnabled = true;
+                handler.postDelayed(this::resumeListening, 800);
+            }
+        }, 350);
     }
 
     private void releaseRecognizer() {
