@@ -1,4 +1,4 @@
-name: Build Ok Leia Screen-Off v5
+name: Build Ok Leia Screen-Off v5.1
 
 on:
   push:
@@ -52,8 +52,8 @@ jobs:
           p = root / "app/build.gradle.kts"
           s = p.read_text()
           s = s.replace('applicationId = "com.desmond.gptwake"', 'applicationId = "md.leia.screenoff"')
-          s = s.replace('versionCode = 3', 'versionCode = 500')
-          s = s.replace('versionName = "1.1.0"', 'versionName = "5.0"')
+          s = s.replace('versionCode = 3', 'versionCode = 501')
+          s = s.replace('versionName = "1.1.0"', 'versionName = "5.1"')
 
           # We only need the Chinese/English KWS model for the custom phoneme sequence.
           # Do not download the much larger Japanese ASR model during this build.
@@ -105,6 +105,20 @@ jobs:
           with p.open("a", encoding="utf-8") as f:
               f.write("\nLEIA L EH1 Y AH0\n")
 
+          # Remove the optional notification-listener service entirely.
+          # It is not required for wake-word detection or ChatGPT Voice launch,
+          # and sideload protection can flag apps that request notification access.
+          p = root / "app/src/main/AndroidManifest.xml"
+          s = p.read_text()
+          start = s.find('        <!-- Optional: gives the screen-on path a Hang Up action.')
+          if start != -1:
+              end_marker = '        </service>\n'
+              end = s.find(end_marker, start)
+              if end != -1:
+                  end += len(end_marker)
+                  s = s[:start] + s[end:]
+          p.write_text(s)
+
           # Rename notification channel too.
           p = root / "app/src/main/res/values/strings.xml"
           s = p.read_text().replace(
@@ -126,12 +140,12 @@ jobs:
       - name: Rename APK
         shell: bash
         run: |
-          cp LeiaWake/app/build/outputs/apk/debug/app-debug.apk "Ok-Leia-ScreenOff-v5.apk"
+          cp LeiaWake/app/build/outputs/apk/debug/app-debug.apk "Ok-Leia-ScreenOff-v5.1.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ok-leia-screenoff-v5
-          path: Ok-Leia-ScreenOff-v5.apk
+          name: ok-leia-screenoff-v5-1
+          path: Ok-Leia-ScreenOff-v5.1.apk
           if-no-files-found: error
           retention-days: 30
