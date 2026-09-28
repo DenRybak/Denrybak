@@ -1,0 +1,137 @@
+name: Build Ok Leia Screen-Off v5
+
+on:
+  push:
+    branches: [ "leia-screenoff-v5" ]
+    paths:
+      - ".github/workflows/leia-screenoff-v5.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
+
+      - name: Install Android 37 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Clone verified screen-off wake engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/suddenBook/GPTWake.git LeiaWake
+          cd LeiaWake
+          git checkout 2e31652be39b1751a6a75eac3027716b7d5286b1
+
+      - name: Customize for Ok Leia
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("LeiaWake")
+
+          # Separate package id so it installs independently from GPTWake / older Leia builds.
+          p = root / "app/build.gradle.kts"
+          s = p.read_text()
+          s = s.replace('applicationId = "com.desmond.gptwake"', 'applicationId = "md.leia.screenoff"')
+          s = s.replace('versionCode = 3', 'versionCode = 500')
+          s = s.replace('versionName = "1.1.0"', 'versionName = "5.0"')
+
+          # We only need the Chinese/English KWS model for the custom phoneme sequence.
+          # Do not download the much larger Japanese ASR model during this build.
+          old = '''androidComponents.onVariants { variant ->
+              variant.sources.assets?.addGeneratedSourceDirectory(prepareJapaneseModels,
+                  PrepareJapaneseModels::outputDirectory)
+          }'''
+          s = s.replace(old, '')
+          p.write_text(s)
+
+          # Russian pronunciation approximation:
+          # "Ок" ~= OW K, "Лея" ~= L EH Y AH.
+          # This is a direct model-token keyword and does not rely on cloud speech recognition.
+          p = root / "app/src/main/java/com/desmond/gptwake/WakeWordStore.java"
+          s = p.read_text()
+          s = s.replace('public static final String DEFAULT_PHRASE = "芝麻开门";',
+                        'public static final String DEFAULT_PHRASE = "Ок Лея";')
+          s = s.replace('public static final String DEFAULT_LINE = "zh ī m á k āi m én @芝麻开门";',
+                        'public static final String DEFAULT_LINE = "OW1 K L EH1 Y AH0 @Ок_Лея";')
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/desmond/gptwake/KwsEngine.java"
+          s = p.read_text().replace('public static final float DEFAULT_THRESHOLD = 0.40f;',
+                                  'public static final float DEFAULT_THRESHOLD = 0.32f;')
+          p.write_text(s)
+
+          p = root / "app/src/main/res/values/strings.xml"
+          s = p.read_text()
+          replacements = {
+              '<string name="app_name">GPTWake</string>':
+                  '<string name="app_name">Ок Лея</string>',
+              '<string name="tagline">Offline wake word · opens ChatGPT voice</string>':
+                  '<string name="tagline">«Ок, Лея» · запускает голосовой ChatGPT</string>',
+              '<string name="notification_listening">GPTWake is listening for the wake word</string>':
+                  '<string name="notification_listening">Ок Лея слушает ключевую фразу</string>',
+              '<string name="privacy_note">Wake word detection runs entirely on this device; no audio is uploaded</string>':
+                  '<string name="privacy_note">Распознавание «Ок, Лея» выполняется локально; аудио никуда не отправляется</string>',
+              '<string name="perm_assistant">ChatGPT is the system default assistant</string>':
+                  '<string name="perm_assistant">ChatGPT выбран цифровым помощником</string>',
+              '<string name="perm_assistant_why">Otherwise ChatGPT can\\\'t get the microphone on the lock screen</string>':
+                  '<string name="perm_assistant_why">Это нужно для голосового режима при заблокированном экране</string>',
+          }
+          for a,b in replacements.items():
+              s = s.replace(a,b)
+          p.write_text(s)
+
+          # Make the English dictionary accept LEIA if the user opens the phrase editor.
+          p = root / "app/src/main/assets/kws/en.phone"
+          with p.open("a", encoding="utf-8") as f:
+              f.write("\nLEIA L EH1 Y AH0\n")
+
+          # Rename notification channel too.
+          p = root / "app/src/main/res/values/strings.xml"
+          s = p.read_text().replace(
+              '<string name="channel_listening">Wake word listening</string>',
+              '<string name="channel_listening">Ок Лея — фоновое прослушивание</string>')
+          p.write_text(s)
+          PY
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        working-directory: LeiaWake
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Rename APK
+        shell: bash
+        run: |
+          cp LeiaWake/app/build/outputs/apk/debug/app-debug.apk "Ok-Leia-ScreenOff-v5.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ok-leia-screenoff-v5
+          path: Ok-Leia-ScreenOff-v5.apk
+          if-no-files-found: error
+          retention-days: 30
