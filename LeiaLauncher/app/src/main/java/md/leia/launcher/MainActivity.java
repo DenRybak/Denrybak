@@ -2,6 +2,7 @@ package md.leia.launcher;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -9,14 +10,17 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private static final int REQ_MIC = 100;
+    private TextView status;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,8 +29,19 @@ public class MainActivity extends Activity {
         requestNeededPermissions();
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (status != null) {
+            status.setText(isAccessibilityEnabled()
+                    ? "✓ Спец. возможности включены — можно тестировать"
+                    : "✗ Сначала включи службу «Ок Лея — управление ChatGPT»");
+            status.setTextColor(isAccessibilityEnabled() ? 0xFF168A2E : 0xFFC62828);
+        }
+    }
+
     private LinearLayout buildUi() {
-        int p = (int) (20 * getResources().getDisplayMetrics().density);
+        int p = (int) (18 * getResources().getDisplayMetrics().density);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(p, p, p, p);
@@ -34,47 +49,46 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.WHITE);
 
         TextView title = new TextView(this);
-        title.setText("Ок, Лея — Voice");
-        title.setTextSize(28);
+        title.setText("Ок, Лея — Voice v4");
+        title.setTextSize(27);
         title.setTextColor(Color.BLACK);
         title.setGravity(Gravity.CENTER);
         root.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView info = new TextView(this);
         info.setText(
-                "Версия 3 запускает именно ChatGPT Voice напрямую.\n\n" +
-                "В ChatGPT желательно включить: Настройки → Голос → «Фоновые разговоры».\n" +
-                "Для запуска при заблокированном экране назначь ChatGPT цифровым помощником Android.\n\n" +
-                "Настройка «Запускать с голосом» для прямого запуска больше не обязательна."
+                "Эта версия не использует deep-link Voice. Она открывает ChatGPT и сама нажимает кнопку голосового режима через Спец. возможности Android.\n\n" +
+                "Служба ограничена только приложением ChatGPT."
         );
         info.setTextSize(16);
         info.setTextColor(Color.DKGRAY);
-        info.setPadding(0, p, 0, p);
+        info.setPadding(0, p, 0, p / 2);
         root.addView(info);
 
-        Button openChat = new Button(this);
-        openChat.setText("Открыть ChatGPT для настройки");
-        openChat.setOnClickListener(v -> openChatGpt());
-        root.addView(openChat, lp());
+        status = new TextView(this);
+        status.setTextSize(16);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(0, 0, 0, p);
+        root.addView(status, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        Button assistant = new Button(this);
-        assistant.setText("Настроить цифрового помощника Android");
-        assistant.setOnClickListener(v -> openDefaultApps());
-        root.addView(assistant, lp());
+        Button accessibility = new Button(this);
+        accessibility.setText("1. Включить Спец. возможности для Ок Лея");
+        accessibility.setOnClickListener(v -> openAccessibilitySettings());
+        root.addView(accessibility, lp());
 
         Button overlay = new Button(this);
-        overlay.setText("1. Разрешить поверх других приложений");
+        overlay.setText("2. Разрешить поверх других приложений");
         overlay.setOnClickListener(v -> requestOverlay());
         root.addView(overlay, lp());
 
         Button start = new Button(this);
-        start.setText("2. Включить «Ок, Лея»");
+        start.setText("3. Включить «Ок, Лея»");
         start.setOnClickListener(v -> startListening());
         root.addView(start, lp());
 
         Button test = new Button(this);
-        test.setText("3. Проверить запуск Voice");
-        test.setOnClickListener(v -> sendServiceAction(WakeService.ACTION_TEST_VOICE));
+        test.setText("4. Проверить запуск Voice");
+        test.setOnClickListener(v -> testVoice());
         root.addView(test, lp());
 
         Button resume = new Button(this);
@@ -88,17 +102,18 @@ public class MainActivity extends Activity {
         root.addView(stop, lp());
 
         TextView hint = new TextView(this);
-        hint.setText("Распознаются «Ок Лея», «Окей Лея» и близкие варианты произношения. После запуска Voice прослушивание «Ок Лея» ставится на паузу, чтобы не занимать микрофон.");
+        hint.setText("Тест должен открыть ChatGPT и примерно через 1–2 секунды автоматически нажать Voice. Если появится запрос Android на разрешение службы — разреши его.");
         hint.setTextSize(14);
         hint.setTextColor(Color.GRAY);
         hint.setPadding(0, p, 0, 0);
         root.addView(hint);
+
         return root;
     }
 
     private LinearLayout.LayoutParams lp() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 6, 0, 6);
+        lp.setMargins(0, 5, 0, 5);
         return lp;
     }
 
@@ -110,6 +125,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openAccessibilitySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        } catch (Throwable t) {
+            startActivity(new Intent(Settings.ACTION_SETTINGS));
+        }
+    }
+
+    private boolean isAccessibilityEnabled() {
+        ComponentName expected = new ComponentName(this, VoiceAccessibilityService.class);
+        String enabled = Settings.Secure.getString(
+                getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabled == null) return false;
+
+        TextUtils.SimpleStringSplitter splitter = new TextUtils.SimpleStringSplitter(':');
+        splitter.setString(enabled);
+        while (splitter.hasNext()) {
+            ComponentName cn = ComponentName.unflattenFromString(splitter.next());
+            if (expected.equals(cn)) return true;
+        }
+        return false;
+    }
+
     private void requestOverlay() {
         if (!Settings.canDrawOverlays(this)) {
             Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
@@ -118,6 +157,11 @@ public class MainActivity extends Activity {
     }
 
     private void startListening() {
+        if (!isAccessibilityEnabled()) {
+            Toast.makeText(this, "Сначала включи службу в Спец. возможностях", Toast.LENGTH_LONG).show();
+            openAccessibilitySettings();
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
             return;
@@ -126,33 +170,21 @@ public class MainActivity extends Activity {
             requestOverlay();
             return;
         }
-        Intent i = new Intent(this, WakeService.class);
-        i.setAction(WakeService.ACTION_RESUME);
-        if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+        sendServiceAction(WakeService.ACTION_RESUME);
+    }
+
+    private void testVoice() {
+        if (!isAccessibilityEnabled()) {
+            Toast.makeText(this, "Сначала включи «Ок Лея — управление ChatGPT»", Toast.LENGTH_LONG).show();
+            openAccessibilitySettings();
+            return;
+        }
+        sendServiceAction(WakeService.ACTION_TEST_VOICE);
     }
 
     private void sendServiceAction(String action) {
         Intent i = new Intent(this, WakeService.class);
         i.setAction(action);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
-    }
-
-    private void openDefaultApps() {
-        try {
-            startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
-        } catch (Throwable t) {
-            startActivity(new Intent(Settings.ACTION_SETTINGS));
-        }
-    }
-
-    private void openChatGpt() {
-        try {
-            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://chatgpt.com/"));
-            i.setPackage("com.openai.chatgpt");
-            startActivity(i);
-        } catch (Throwable t) {
-            Intent launch = getPackageManager().getLaunchIntentForPackage("com.openai.chatgpt");
-            if (launch != null) startActivity(launch);
-        }
     }
 }
