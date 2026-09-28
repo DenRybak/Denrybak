@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="md.leia.assistant.LeiaSessionService"
+    android:recognitionService="md.leia.assistant.LeiaRecognitionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:settingsActivity="md.leia.assistant.MainActivity" />
