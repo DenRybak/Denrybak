@@ -42,10 +42,10 @@ public class MainActivity extends Activity {
 
         TextView info = new TextView(this);
         info.setText(
-                "ВАЖНО — один раз настрой ChatGPT:\n" +
-                "ChatGPT → Настройки → Голос → «Запускать с голосом» = ВКЛ.\n\n" +
-                "После этого фраза «Ок, Лея» откроет новый чат ChatGPT, а ChatGPT сам сразу запустит голосовой режим.\n\n" +
-                "Лея освобождает микрофон перед запуском ChatGPT, чтобы Voice мог сразу тебя слышать."
+                "Версия 3 запускает именно ChatGPT Voice напрямую.\n\n" +
+                "В ChatGPT желательно включить: Настройки → Голос → «Фоновые разговоры».\n" +
+                "Для запуска при заблокированном экране назначь ChatGPT цифровым помощником Android.\n\n" +
+                "Настройка «Запускать с голосом» для прямого запуска больше не обязательна."
         );
         info.setTextSize(16);
         info.setTextColor(Color.DKGRAY);
@@ -56,6 +56,11 @@ public class MainActivity extends Activity {
         openChat.setText("Открыть ChatGPT для настройки");
         openChat.setOnClickListener(v -> openChatGpt());
         root.addView(openChat, lp());
+
+        Button assistant = new Button(this);
+        assistant.setText("Настроить цифрового помощника Android");
+        assistant.setOnClickListener(v -> openDefaultApps());
+        root.addView(assistant, lp());
 
         Button overlay = new Button(this);
         overlay.setText("1. Разрешить поверх других приложений");
@@ -130,6 +135,14 @@ public class MainActivity extends Activity {
         Intent i = new Intent(this, WakeService.class);
         i.setAction(action);
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i);
+    }
+
+    private void openDefaultApps() {
+        try {
+            startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
+        } catch (Throwable t) {
+            startActivity(new Intent(Settings.ACTION_SETTINGS));
+        }
     }
 
     private void openChatGpt() {
