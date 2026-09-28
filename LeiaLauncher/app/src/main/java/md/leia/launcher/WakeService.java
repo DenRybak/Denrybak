@@ -21,6 +21,7 @@ public class WakeService extends Service implements RecognitionListener {
     private Intent recognizerIntent;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean stopping = false;
+    private long lastLaunchAt = 0L;
     private WindowManager windowManager;
     private TextView bubble;
 
@@ -38,15 +39,7 @@ public class WakeService extends Service implements RecognitionListener {
     }
 
     private void setupRecognizer() {
-        try {
-            if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
-            } else {
-                recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            }
-        } catch (Throwable t) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        }
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
         recognizer.setRecognitionListener(this);
         recognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         recognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
@@ -84,6 +77,9 @@ public class WakeService extends Service implements RecognitionListener {
     }
 
     private void openChatGpt() {
+        long now = System.currentTimeMillis();
+        if (now - lastLaunchAt < 3000) return;
+        lastLaunchAt = now;
         try {
             Intent launch = getPackageManager().getLaunchIntentForPackage("com.openai.chatgpt");
             if (launch == null) {
@@ -171,7 +167,7 @@ public class WakeService extends Service implements RecognitionListener {
     @Override public void onBeginningOfSpeech() {}
     @Override public void onRmsChanged(float rmsdB) {}
     @Override public void onBufferReceived(byte[] buffer) {}
-    @Override public void onEndOfSpeech() { restartSoon(350); }
+    @Override public void onEndOfSpeech() {}
     @Override public void onError(int error) { restartSoon(error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ? 1200 : 500); }
     @Override public void onResults(Bundle results) {
         inspect(results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION));
