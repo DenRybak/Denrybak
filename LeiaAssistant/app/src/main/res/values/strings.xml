@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Лея Assistant</string>
+    <string name="voice_service_label">Лея — системный ассистент</string>
+</resources>
