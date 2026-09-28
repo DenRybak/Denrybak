@@ -43,13 +43,11 @@ public class WakeService extends Service implements RecognitionListener {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
-
         if (ACTION_TEST_VOICE.equals(action)) {
             launchChatGptVoice();
         } else if (ACTION_RESUME.equals(action)) {
             resumeListening();
         }
-
         return START_STICKY;
     }
 
@@ -67,7 +65,7 @@ public class WakeService extends Service implements RecognitionListener {
             recognizerIntent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 7);
             recognizerIntent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
         } catch (Throwable t) {
-            updateNotification("Ошибка распознавания речи. Открой приложение.");
+            updateNotification("Ошибка распознавания речи");
         }
     }
 
@@ -75,7 +73,6 @@ public class WakeService extends Service implements RecognitionListener {
         if (!listeningEnabled || destroyed || launching) return;
         if (recognizer == null) setupRecognizer();
         if (recognizer == null) return;
-
         try {
             recognizer.startListening(recognizerIntent);
             updateNotification("Слушаю: «Ок, Лея»");
@@ -95,35 +92,24 @@ public class WakeService extends Service implements RecognitionListener {
 
     private boolean isWakePhrase(String input) {
         if (input == null) return false;
-
         String s = input.toLowerCase(Locale.ROOT)
                 .replace('ё','е')
                 .replaceAll("[^a-zа-я0-9 ]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
 
-        boolean ok =
-                s.contains("окей") ||
-                s.contains("okay") ||
-                s.startsWith("ок ") ||
-                s.equals("ок") ||
-                s.contains(" ок ");
+        boolean ok = s.contains("окей") || s.contains("okay") ||
+                s.startsWith("ок ") || s.equals("ок") || s.contains(" ок ");
 
-        boolean leia =
-                s.contains("лея") ||
-                s.contains("леа") ||
-                s.contains("леиа") ||
-                s.contains("лейя") ||
-                s.contains("лия") ||
-                s.contains("leia") ||
-                s.contains("leya");
+        boolean leia = s.contains("лея") || s.contains("леа") ||
+                s.contains("леиа") || s.contains("лейя") || s.contains("лия") ||
+                s.contains("leia") || s.contains("leya");
 
         return ok && leia;
     }
 
     private void inspect(ArrayList<String> matches) {
         if (matches == null || launching) return;
-
         for (String s : matches) {
             if (isWakePhrase(s)) {
                 launchChatGptVoice();
@@ -140,21 +126,33 @@ public class WakeService extends Service implements RecognitionListener {
         lastLaunchAt = now;
         listeningEnabled = false;
 
+        // ChatGPT Voice needs the microphone, so release ours first.
         releaseRecognizer();
-        updateNotification("«Ок, Лея» услышано — освобождаю микрофон");
+
+        // Accessibility service gets a short-lived instruction to click Voice
+        // after ChatGPT's window appears.
+        getSharedPreferences(VoiceAccessibilityService.PREFS, MODE_PRIVATE)
+                .edit()
+                .putLong(VoiceAccessibilityService.KEY_PENDING_UNTIL,
+                        System.currentTimeMillis() + 15000L)
+                .apply();
+
+        updateNotification("Открываю ChatGPT и нажимаю Voice");
 
         handler.postDelayed(() -> {
-            GptLauncher.Result result = GptLauncher.launch(this);
-
-            if (result == GptLauncher.Result.DIRECT) {
-                updateNotification("ChatGPT Voice запущен напрямую");
-            } else if (result == GptLauncher.Result.DEEPLINK) {
-                updateNotification("ChatGPT Voice запущен через mode=voice");
-            } else {
-                updateNotification("Не удалось запустить Voice. Открой приложение «Ок, Лея»");
+            try {
+                Intent launch = getPackageManager().getLaunchIntentForPackage("com.openai.chatgpt");
+                if (launch == null) throw new IllegalStateException("ChatGPT not installed");
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(launch);
+                updateNotification("ChatGPT открыт — запускаю голосовой режим");
+            } catch (Throwable t) {
+                getSharedPreferences(VoiceAccessibilityService.PREFS, MODE_PRIVATE)
+                        .edit().remove(VoiceAccessibilityService.KEY_PENDING_UNTIL).apply();
                 launching = false;
                 listeningEnabled = true;
-                handler.postDelayed(this::resumeListening, 800);
+                updateNotification("Не удалось открыть ChatGPT");
+                handler.postDelayed(this::resumeListening, 1000);
             }
         }, 350);
     }
@@ -208,9 +206,7 @@ public class WakeService extends Service implements RecognitionListener {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(
-                    CHANNEL_ID,
-                    "Прослушивание Ок Лея",
-                    NotificationManager.IMPORTANCE_LOW);
+                    CHANNEL_ID, "Прослушивание Ок Лея", NotificationManager.IMPORTANCE_LOW);
             ch.setDescription("Фоновое распознавание фразы «Ок, Лея»");
             nm.createNotificationChannel(ch);
         }
@@ -218,7 +214,6 @@ public class WakeService extends Service implements RecognitionListener {
 
     private void showOverlayBubble() {
         if (!Settings.canDrawOverlays(this)) return;
-
         try {
             windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
             bubble = new TextView(this);
@@ -230,15 +225,13 @@ public class WakeService extends Service implements RecognitionListener {
 
             int size = (int)(28 * getResources().getDisplayMetrics().density);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                    size,
-                    size,
+                    size, size,
                     Build.VERSION.SDK_INT >= 26
                             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                             : WindowManager.LayoutParams.TYPE_PHONE,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                     PixelFormat.TRANSLUCENT);
-
             lp.gravity = Gravity.TOP | Gravity.END;
             lp.x = 6;
             lp.y = (int)(90 * getResources().getDisplayMetrics().density);
@@ -263,7 +256,6 @@ public class WakeService extends Service implements RecognitionListener {
     }
 
     @Override public android.os.IBinder onBind(Intent intent) { return null; }
-
     @Override public void onReadyForSpeech(Bundle params) {}
     @Override public void onBeginningOfSpeech() {}
     @Override public void onRmsChanged(float rmsdB) {}
@@ -272,12 +264,11 @@ public class WakeService extends Service implements RecognitionListener {
 
     @Override public void onError(int error) {
         if (!listeningEnabled || launching) return;
-
         long delay;
         if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) delay = 1400;
-        else if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) delay = 1800;
+        else if (error == SpeechRecognizer.ERROR_NETWORK ||
+                error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) delay = 1800;
         else delay = 550;
-
         restartSoon(delay);
     }
 
