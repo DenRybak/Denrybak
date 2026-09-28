@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Ок Лея</string>
+    <string name="accessibility_service_description">Открывает ChatGPT и нажимает кнопку голосового режима после фразы «Ок, Лея». Служба работает только с приложением ChatGPT.</string>
 </resources>
